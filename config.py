@@ -23,6 +23,9 @@ class Config:
 
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-inseguro-troque-em-producao")
 
+    # Telegram — token do bot para notificações de estado das câmeras
+    TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
+
     # Fuso horário do sistema
     TIMEZONE = "America/Sao_Paulo"
 

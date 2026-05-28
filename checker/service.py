@@ -8,32 +8,34 @@ Fluxo:
   3. Se o status mudou → grava evento_camera + atualiza camera
   4. Se voltou online   → preenche duracao_offline_segundos no último evento offline
   5. Se não mudou      → apenas atualiza ultima_verificacao
-  6. Dorme CHECKER_LOOP_SLEEP segundos e repete
+  6. Após commit → envia notificações Telegram para grupos configurados
+  7. Dorme CHECKER_LOOP_SLEEP segundos e repete
 """
 
+import json
 import logging
 import subprocess
 import sys
 import time
+import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import text
+
 _SP = ZoneInfo("America/Sao_Paulo")
 
 # Debounce: exige N falhas consecutivas antes de marcar câmera como offline.
-# Evita "flapping" em câmeras que respondem no limite do timeout.
 _OFFLINE_DEBOUNCE = 2
-_falhas: dict[int, int] = {}  # {camera_id: contagem de falhas consecutivas}
-
-from sqlalchemy import text
+_falhas: dict[int, int] = {}
 
 # Permite rodar como script autônomo ou importado pelo Flask
 import os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from app import create_app
-from app.models import db, Camera, EventoCamera, StatusCamera, StatusEvento
+from app.models import db, EventoCamera, StatusEvento
 from config import Config
 
 # ------------------------------------------------------------------
@@ -55,10 +57,6 @@ log = logging.getLogger("camwatch.checker")
 # ------------------------------------------------------------------
 
 def check_rtsp(url: str, timeout: int = Config.CHECKER_TIMEOUT_SEC) -> bool:
-    """
-    Retorna True se o stream RTSP está acessível.
-    Usa FFprobe sem decodificar vídeo — apenas testa conectividade.
-    """
     try:
         result = subprocess.run(
             [
@@ -85,41 +83,72 @@ def check_rtsp(url: str, timeout: int = Config.CHECKER_TIMEOUT_SEC) -> bool:
 
 
 # ------------------------------------------------------------------
+# Telegram
+# ------------------------------------------------------------------
+
+def _formatar_duracao(segundos: int | None) -> str:
+    if not segundos:
+        return "desconhecido"
+    if segundos >= 3600:
+        return f"{segundos // 3600}h {(segundos % 3600) // 60}min"
+    if segundos >= 60:
+        return f"{segundos // 60}min {segundos % 60}s"
+    return f"{segundos}s"
+
+
+def enviar_telegram(chat_id: str, mensagem: str):
+    token = Config.TELEGRAM_BOT_TOKEN
+    if not token or not chat_id:
+        return
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    dados = json.dumps({"chat_id": chat_id, "text": mensagem}).encode()
+    req = urllib.request.Request(
+        url, data=dados, headers={"Content-Type": "application/json"}
+    )
+    try:
+        urllib.request.urlopen(req, timeout=5)
+        log.debug(f"Telegram enviado para {chat_id}")
+    except Exception as e:
+        log.warning(f"Telegram [{chat_id}]: {e}")
+
+
+# ------------------------------------------------------------------
 # Lógica de persistência
 # ------------------------------------------------------------------
 
 def get_cameras_due(session) -> list:
-    """
-    Retorna câmeras ativas cujo intervalo individual já venceu.
-    Usa query SQL direta para performance com 500+ câmeras.
-    """
+    """Retorna câmeras ativas cujo intervalo individual já venceu."""
     sql = text("""
-        SELECT id, nome, url_rtsp, ultimo_status, intervalo_segundos
-        FROM camera
-        WHERE ativo = TRUE
+        SELECT
+            c.id, c.nome, c.url_rtsp, c.ultimo_status, c.intervalo_segundos,
+            e.nome  AS empresa_nome,
+            g.telegram AS grupo_telegram
+        FROM camera c
+        JOIN empresa e ON e.id = c.empresa_id
+        LEFT JOIN grupo_camera g ON g.id = c.grupo_id
+        WHERE c.ativo = TRUE
           AND (
-              ultima_verificacao IS NULL
-              OR DATE_ADD(ultima_verificacao, INTERVAL intervalo_segundos SECOND) <= NOW()
+              c.ultima_verificacao IS NULL
+              OR DATE_ADD(c.ultima_verificacao, INTERVAL c.intervalo_segundos SECOND) <= NOW()
           )
     """)
     rows = session.execute(sql).mappings().all()
     return [dict(r) for r in rows]
 
 
-def processar_resultado(session, cam: dict, novo_status: str, agora: datetime):
+def processar_resultado(session, cam: dict, novo_status: str, agora: datetime) -> dict | None:
     """
     Compara novo status com o atual e age conforme necessário.
+    Retorna dict de notificação pendente ou None.
     """
     status_atual = cam["ultimo_status"]
     camera_id    = cam["id"]
 
-    # Sempre atualiza ultima_verificacao
     session.execute(
         text("UPDATE camera SET ultima_verificacao = :ts WHERE id = :id"),
         {"ts": agora, "id": camera_id},
     )
 
-    # Debounce offline: só confirma após _OFFLINE_DEBOUNCE falhas consecutivas
     if novo_status == "online":
         _falhas[camera_id] = 0
     elif novo_status == "offline" and status_atual != "offline":
@@ -127,41 +156,54 @@ def processar_resultado(session, cam: dict, novo_status: str, agora: datetime):
         if _falhas[camera_id] < _OFFLINE_DEBOUNCE:
             log.debug(f"Câmera {cam['nome']} (id={camera_id}): "
                       f"falha {_falhas[camera_id]}/{_OFFLINE_DEBOUNCE}, aguardando confirmação.")
-            return
+            return None
 
-    # Sem mudança de estado — só atualiza timestamp
     if status_atual == novo_status:
-        return
+        return None
 
-    # --- Mudança de estado confirmada ---
     log.info(f"[MUDANÇA] Câmera {cam['nome']} (id={camera_id}): {status_atual} → {novo_status}")
 
-    # Atualiza ultimo_status na camera
     session.execute(
         text("UPDATE camera SET ultimo_status = :s WHERE id = :id"),
         {"s": novo_status, "id": camera_id},
     )
 
-    # Calcula duração offline se câmera voltou online
     duracao = None
     if novo_status == "online" and status_atual == "offline":
         duracao = calcular_duracao_offline(session, camera_id, agora)
 
-    # Grava evento
-    evento = EventoCamera(
+    session.add(EventoCamera(
         camera_id=camera_id,
         status=StatusEvento[novo_status],
         timestamp=agora,
         duracao_offline_segundos=duracao,
-    )
-    session.add(evento)
+    ))
+
+    # Prepara notificação se o grupo tiver telegram configurado
+    telegram = cam.get("grupo_telegram")
+    if telegram:
+        hora = agora.strftime("%d/%m/%Y %H:%M:%S")
+        if novo_status == "offline":
+            mensagem = (
+                f"🔴 CÂMERA OFFLINE\n\n"
+                f"📷 {cam['nome']}\n"
+                f"🏢 {cam['empresa_nome']}\n"
+                f"🕒 {hora}"
+            )
+        else:
+            mensagem = (
+                f"🟢 CÂMERA ONLINE\n\n"
+                f"📷 {cam['nome']}\n"
+                f"🏢 {cam['empresa_nome']}\n"
+                f"⏱ Offline por: {_formatar_duracao(duracao)}\n"
+                f"🕒 {hora}"
+            )
+        return {"chat_id": telegram, "mensagem": mensagem}
+
+    return None
 
 
 def calcular_duracao_offline(session, camera_id: int, agora: datetime) -> int | None:
-    """
-    Busca o último evento offline desta câmera e calcula
-    quantos segundos ela ficou fora.
-    """
     sql = text("""
         SELECT timestamp FROM evento_camera
         WHERE camera_id = :id AND status = 'offline'
@@ -170,8 +212,7 @@ def calcular_duracao_offline(session, camera_id: int, agora: datetime) -> int | 
     """)
     row = session.execute(sql, {"id": camera_id}).fetchone()
     if row:
-        delta = (agora - row[0]).total_seconds()
-        return int(delta)
+        return int((agora - row[0]).total_seconds())
     return None
 
 
@@ -192,9 +233,7 @@ def run_checker():
 
         with app.app_context():
             with db.engine.begin() as conn_raw:
-                # Usamos uma session manual para controle fino
                 session = db.session
-
                 cameras = get_cameras_due(session)
 
                 if not cameras:
@@ -204,23 +243,27 @@ def run_checker():
 
                 log.info(f"Verificando {len(cameras)} câmeras...")
 
+                notificacoes = []
                 with ThreadPoolExecutor(max_workers=Config.CHECKER_WORKERS) as executor:
                     futures = {
                         executor.submit(check_rtsp, cam["url_rtsp"]): cam
                         for cam in cameras
                     }
                     for future in as_completed(futures):
-                        cam    = futures[future]
-                        online = future.result()
-                        novo_status = "online" if online else "offline"
+                        cam         = futures[future]
+                        novo_status = "online" if future.result() else "offline"
                         try:
-                            processar_resultado(session, cam, novo_status, agora)
+                            notif = processar_resultado(session, cam, novo_status, agora)
+                            if notif:
+                                notificacoes.append(notif)
                         except Exception as e:
                             log.error(f"Erro ao processar câmera {cam['id']}: {e}")
 
                 try:
                     session.commit()
                     log.info("Ciclo concluído e commit realizado.")
+                    for notif in notificacoes:
+                        enviar_telegram(notif["chat_id"], notif["mensagem"])
                 except Exception as e:
                     session.rollback()
                     log.error(f"Erro no commit: {e}")
