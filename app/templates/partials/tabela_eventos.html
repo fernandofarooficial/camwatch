@@ -1,0 +1,98 @@
+{% macro pag_url(p) %}
+  {{ url_for('monitor.eventos_parcial') }}?page={{ p }}{% if empresa_id %}&empresa_id={{ empresa_id }}{% endif %}{% if grupo_id %}&grupo_id={{ grupo_id }}{% endif %}{% if camera_id %}&camera_id={{ camera_id }}{% endif %}
+{% endmacro %}
+
+<div class="tabela-header">
+  <span class="tabela-total">{{ total }} evento{{ 's' if total != 1 else '' }}</span>
+</div>
+
+{% if eventos %}
+<div class="tabela-wrapper">
+  <table class="tabela-eventos">
+    <thead>
+      <tr>
+        <th>Status</th>
+        <th>Câmera</th>
+        <th>Empresa</th>
+        <th>Grupo</th>
+        <th>Quando</th>
+        <th>Offline por</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for ev in eventos %}
+      <tr class="row-{{ ev.status.value }}">
+
+        <!-- Status badge -->
+        <td>
+          <span class="badge badge-{{ ev.status.value }}">
+            {{ '●' }} {{ ev.status.value | upper }}
+          </span>
+        </td>
+
+        <!-- Câmera -->
+        <td class="td-mono">{{ ev.camera.nome if ev.camera else '—' }}</td>
+
+        <!-- Empresa -->
+        <td>{{ ev.camera.empresa.nome if ev.camera and ev.camera.empresa else '—' }}</td>
+
+        <!-- Grupo -->
+        <td class="td-muted">
+          {{ ev.camera.grupo.nome if ev.camera and ev.camera.grupo else '—' }}
+        </td>
+
+        <!-- Timestamp -->
+        <td class="td-mono td-ts">
+          {{ ev.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}
+        </td>
+
+        <!-- Duração offline -->
+        <td class="td-mono td-muted">
+          {% if ev.duracao_offline_segundos %}
+            {% set s = ev.duracao_offline_segundos %}
+            {% if s >= 3600 %}
+              {{ (s // 3600) }}h {{ ((s % 3600) // 60) }}min
+            {% elif s >= 60 %}
+              {{ s // 60 }}min {{ s % 60 }}s
+            {% else %}
+              {{ s }}s
+            {% endif %}
+          {% elif ev.status.value == 'offline' %}
+            <span class="td-em-curso">em curso</span>
+          {% else %}
+            —
+          {% endif %}
+        </td>
+
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<!-- Paginação -->
+{% if paginas > 1 %}
+<div class="paginacao">
+  {% if page > 1 %}
+    <button class="btn-pag"
+            hx-get="{{ pag_url(page - 1) }}"
+            hx-target="#tabela-wrapper"
+            hx-swap="innerHTML">‹ Anterior</button>
+  {% endif %}
+
+  <span class="pag-info">{{ page }} / {{ paginas }}</span>
+
+  {% if page < paginas %}
+    <button class="btn-pag"
+            hx-get="{{ pag_url(page + 1) }}"
+            hx-target="#tabela-wrapper"
+            hx-swap="innerHTML">Próxima ›</button>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="tabela-vazia">
+  <span>Nenhum evento encontrado para os filtros selecionados.</span>
+</div>
+{% endif %}

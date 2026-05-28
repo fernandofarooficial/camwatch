@@ -1,0 +1,49 @@
+{% extends "cadastro/base_cadastro.html" %}
+
+{% block cadastro_content %}
+
+<div class="list-header">
+  <span class="list-count">{{ empresas|length }} empresa{{ 's' if empresas|length != 1 else '' }}</span>
+  <a href="{{ url_for('cadastro.empresa_nova') }}" class="btn-novo">+ Nova empresa</a>
+</div>
+
+{% if empresas %}
+<div class="tabela-wrapper">
+  <table class="tabela-eventos">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>CNPJ</th>
+        <th>Status</th>
+        <th>Câmeras</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in empresas %}
+      <tr>
+        <td>{{ e.nome }}</td>
+        <td class="td-mono td-muted">{{ e.cnpj or '—' }}</td>
+        <td>
+          <span class="badge {{ 'badge-online' if e.ativo else 'badge-offline' }}">
+            {{ 'ATIVO' if e.ativo else 'INATIVO' }}
+          </span>
+        </td>
+        <td class="td-mono">{{ e.cameras.count() }}</td>
+        <td class="td-acoes">
+          <a href="{{ url_for('cadastro.empresa_editar', id=e.id) }}" class="btn-acao">Editar</a>
+          <form method="POST" action="{{ url_for('cadastro.empresa_excluir', id=e.id) }}"
+                onsubmit="return confirm('Excluir empresa {{ e.nome }}?')">
+            <button type="submit" class="btn-acao btn-acao-danger">Excluir</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="tabela-vazia">Nenhuma empresa cadastrada.</div>
+{% endif %}
+
+{% endblock %}

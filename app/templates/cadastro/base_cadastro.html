@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block page_title %}Cadastros{% endblock %}
+
+{% block header_actions %}
+  <nav class="sub-nav">
+    <a href="{{ url_for('cadastro.empresas') }}"
+       class="sub-nav-item {% if request.endpoint == 'cadastro.empresas' or request.endpoint == 'cadastro.empresa_nova' or request.endpoint == 'cadastro.empresa_editar' %}active{% endif %}">
+      Empresas
+    </a>
+    <a href="{{ url_for('cadastro.grupos') }}"
+       class="sub-nav-item {% if 'grupo' in request.endpoint %}active{% endif %}">
+      Grupos
+    </a>
+    <a href="{{ url_for('cadastro.cameras') }}"
+       class="sub-nav-item {% if 'camera' in request.endpoint %}active{% endif %}">
+      Câmeras
+    </a>
+  </nav>
+{% endblock %}
+
+{% block content %}
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="flash flash-{{ category }}">{{ message }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% block cadastro_content %}{% endblock %}
+
+{% endblock %}

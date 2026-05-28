@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}CamWatch{% endblock %}</title>
+
+  <!-- HTMX -->
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <!-- Fonte: DM Sans (display) + DM Mono (dados) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-icon">⬡</span>
+      <span class="brand-name">CamWatch</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="{{ url_for('monitor.index') }}"
+         class="nav-item {% if request.blueprint == 'monitor' %}active{% endif %}">
+        <span class="nav-icon">◉</span> Monitor
+      </a>
+      <a href="{{ url_for('cadastro.empresas') }}"
+         class="nav-item {% if request.blueprint == 'cadastro' %}active{% endif %}">
+        <span class="nav-icon">◈</span> Cadastros
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <span class="version">v1.0</span>
+    </div>
+  </aside>
+
+  <!-- Conteúdo principal -->
+  <main class="main-content">
+    <div class="page-header">
+      <h1>{% block page_title %}{% endblock %}</h1>
+      <div class="header-actions">{% block header_actions %}{% endblock %}</div>
+    </div>
+    {% block content %}{% endblock %}
+  </main>
+
+  {% block scripts %}{% endblock %}
+</body>
+</html>

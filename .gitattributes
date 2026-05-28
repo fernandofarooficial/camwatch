@@ -1,0 +1,15 @@
+# Arquivos que rodam no Linux sempre com LF
+*.sh            text eol=lf
+*.service       text eol=lf
+camwatch.nginx  text eol=lf
+
+# Python e templates — LF
+*.py            text eol=lf
+*.html          text eol=lf
+*.css           text eol=lf
+
+# Texto genérico
+*.txt           text eol=lf
+*.md            text eol=lf
+*.env*          text eol=lf
+.gitignore      text eol=lf

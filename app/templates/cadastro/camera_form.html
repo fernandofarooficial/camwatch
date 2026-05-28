@@ -1,0 +1,114 @@
+{% extends "cadastro/base_cadastro.html" %}
+
+{% block cadastro_content %}
+
+<div class="form-card">
+  <h2 class="form-title">
+    {{ 'Editar câmera' if camera else 'Nova câmera' }}
+  </h2>
+
+  <form method="POST">
+
+    <div class="form-row">
+      <label for="empresa_id">Empresa <span class="obrigatorio">*</span></label>
+      <select id="empresa_id" name="empresa_id" required>
+        <option value="">Selecione...</option>
+        {% for e in empresas %}
+          <option value="{{ e.id }}"
+            {% if camera and camera.empresa_id == e.id %}selected{% endif %}>
+            {{ e.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="form-row">
+      <label for="grupo_id">Grupo <span class="form-hint">(opcional)</span></label>
+      <select id="grupo_id" name="grupo_id">
+        <option value="">Sem grupo</option>
+        {% for g in grupos %}
+          <option value="{{ g.id }}"
+                  data-empresa="{{ g.empresa_id }}"
+            {% if camera and camera.grupo_id == g.id %}selected{% endif %}>
+            {{ g.nome }} — {{ g.empresa.nome }}
+          </option>
+        {% endfor %}
+      </select>
+      <span class="form-hint-text">Apenas grupos da empresa selecionada serão exibidos.</span>
+    </div>
+
+    <div class="form-row">
+      <label for="nome">Nome <span class="obrigatorio">*</span></label>
+      <input type="text" id="nome" name="nome"
+             value="{{ camera.nome if camera else '' }}"
+             placeholder="Ex: CAM-ENTRADA-01"
+             required maxlength="100">
+    </div>
+
+    <div class="form-row">
+      <label for="url_rtsp">URL RTSP <span class="obrigatorio">*</span></label>
+      <input type="text" id="url_rtsp" name="url_rtsp"
+             value="{{ camera.url_rtsp if camera else '' }}"
+             placeholder="rtsp://usuario:senha@192.168.1.100:554/stream"
+             required maxlength="255"
+             style="font-family: var(--mono); font-size: 12px;">
+    </div>
+
+    <div class="form-row">
+      <label for="intervalo_segundos">Intervalo de verificação (segundos)</label>
+      <div style="display:flex; align-items:center; gap:12px;">
+        <input type="number" id="intervalo_segundos" name="intervalo_segundos"
+               value="{{ camera.intervalo_segundos if camera else 60 }}"
+               min="10" max="3600" style="width:120px;">
+        <span class="form-hint-text">Mínimo 10s · padrão 60s</span>
+      </div>
+    </div>
+
+    {% if camera %}
+    <div class="form-row form-row-inline">
+      <label>
+        <input type="checkbox" name="ativo" {% if camera.ativo %}checked{% endif %}>
+        Câmera ativa
+      </label>
+    </div>
+    {% endif %}
+
+    <div class="form-acoes">
+      <a href="{{ url_for('cadastro.cameras') }}" class="btn-cancelar">Cancelar</a>
+      <button type="submit" class="btn-salvar">
+        {{ 'Salvar alterações' if camera else 'Cadastrar' }}
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Filtra grupos pelo empresa_id selecionado
+const selEmpresa = document.getElementById('empresa_id');
+const selGrupo   = document.getElementById('grupo_id');
+const opcoesGrupo = Array.from(selGrupo.options);
+
+function filtrarGrupos() {
+  const empresaId = selEmpresa.value;
+  selGrupo.innerHTML = '';
+
+  const vazio = document.createElement('option');
+  vazio.value = ''; vazio.textContent = 'Sem grupo';
+  selGrupo.appendChild(vazio);
+
+  opcoesGrupo.forEach(op => {
+    if (!op.value) return;
+    if (!empresaId || op.dataset.empresa === empresaId) {
+      selGrupo.appendChild(op.cloneNode(true));
+    }
+  });
+}
+
+selEmpresa.addEventListener('change', filtrarGrupos);
+filtrarGrupos(); // executa ao carregar para respeitar valor já selecionado
+</script>
+{% endblock %}

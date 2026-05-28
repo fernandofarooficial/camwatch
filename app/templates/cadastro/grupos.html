@@ -1,0 +1,45 @@
+{% extends "cadastro/base_cadastro.html" %}
+
+{% block cadastro_content %}
+
+<div class="list-header">
+  <span class="list-count">{{ grupos|length }} grupo{{ 's' if grupos|length != 1 else '' }}</span>
+  <a href="{{ url_for('cadastro.grupo_novo') }}" class="btn-novo">+ Novo grupo</a>
+</div>
+
+{% if grupos %}
+<div class="tabela-wrapper">
+  <table class="tabela-eventos">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>Empresa</th>
+        <th>Descrição</th>
+        <th>Câmeras</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for g in grupos %}
+      <tr>
+        <td>{{ g.nome }}</td>
+        <td class="td-muted">{{ g.empresa.nome }}</td>
+        <td class="td-muted">{{ g.descricao or '—' }}</td>
+        <td class="td-mono">{{ g.cameras.count() }}</td>
+        <td class="td-acoes">
+          <a href="{{ url_for('cadastro.grupo_editar', id=g.id) }}" class="btn-acao">Editar</a>
+          <form method="POST" action="{{ url_for('cadastro.grupo_excluir', id=g.id) }}"
+                onsubmit="return confirm('Excluir grupo {{ g.nome }}?')">
+            <button type="submit" class="btn-acao btn-acao-danger">Excluir</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="tabela-vazia">Nenhum grupo cadastrado.</div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,16 @@
+[Unit]
+Description=CamWatch — Checker RTSP
+After=network.target mysql.service
+
+[Service]
+User=workuser
+WorkingDirectory=/home/workuser/camwatch
+Environment="PATH=/home/workuser/camwatch/venv/bin"
+ExecStart=/home/workuser/camwatch/venv/bin/python checker/service.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

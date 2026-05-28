@@ -1,0 +1,29 @@
+# /etc/nginx/sites-available/camwatch
+#
+# Substitua camwatch.seudominio.com pelo domínio ou IP real.
+
+server {
+    listen 80;
+    server_name camwatch.seudominio.com;
+
+    # Logs
+    access_log /var/log/nginx/camwatch_access.log;
+    error_log  /var/log/nginx/camwatch_error.log;
+
+    # Arquivos estáticos servidos diretamente pelo Nginx (sem passar pelo Flask)
+    location /static/ {
+        alias /home/workuser/camwatch/app/static/;
+        expires 7d;
+        add_header Cache-Control "public";
+    }
+
+    # Proxy para o Gunicorn via socket Unix
+    location / {
+        proxy_pass         http://127.0.0.1:5005;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        proxy_read_timeout 60s;
+    }
+}

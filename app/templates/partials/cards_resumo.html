@@ -1,0 +1,28 @@
+<div class="cards-resumo">
+
+  <div class="card-status card-total">
+    <span class="card-valor">{{ resumo.total or 0 }}</span>
+    <span class="card-label">Total ativas</span>
+  </div>
+
+  <div class="card-status card-online">
+    <span class="card-valor">{{ resumo.online or 0 }}</span>
+    <span class="card-label">Online</span>
+    {% if resumo.total %}
+    <span class="card-pct">
+      {{ "%.0f"|format((resumo.online or 0) / resumo.total * 100) }}%
+    </span>
+    {% endif %}
+  </div>
+
+  <div class="card-status card-offline">
+    <span class="card-valor">{{ resumo.offline or 0 }}</span>
+    <span class="card-label">Offline</span>
+  </div>
+
+  <div class="card-status card-desconhecido">
+    <span class="card-valor">{{ resumo.desconhecido or 0 }}</span>
+    <span class="card-label">Sem verificação</span>
+  </div>
+
+</div>

@@ -1,0 +1,86 @@
+{% extends "cadastro/base_cadastro.html" %}
+
+{% block cadastro_content %}
+
+<!-- Filtro rápido -->
+<form class="filtros" method="GET" action="{{ url_for('cadastro.cameras') }}">
+  <div class="filtro-grupo">
+    <label>Empresa</label>
+    <select name="empresa_id" onchange="this.form.submit()">
+      <option value="">Todas</option>
+      {% for e in empresas %}
+        <option value="{{ e.id }}" {% if empresa_id == e.id %}selected{% endif %}>{{ e.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="filtro-grupo">
+    <label>Grupo</label>
+    <select name="grupo_id" onchange="this.form.submit()">
+      <option value="">Todos</option>
+      {% for g in grupos %}
+        <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+</form>
+
+<div class="list-header">
+  <span class="list-count">{{ cameras|length }} câmera{{ 's' if cameras|length != 1 else '' }}</span>
+  <a href="{{ url_for('cadastro.camera_nova') }}" class="btn-novo">+ Nova câmera</a>
+</div>
+
+{% if cameras %}
+<div class="tabela-wrapper">
+  <table class="tabela-eventos">
+    <thead>
+      <tr>
+        <th>Nome</th>
+        <th>URL RTSP</th>
+        <th>Empresa</th>
+        <th>Grupo</th>
+        <th>Intervalo</th>
+        <th>Status</th>
+        <th>Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cameras %}
+      <tr class="{{ 'row-inativa' if not c.ativo else '' }}">
+        <td>{{ c.nome }}</td>
+        <td class="td-mono td-muted td-rtsp">{{ c.url_rtsp }}</td>
+        <td class="td-muted">{{ c.empresa.nome }}</td>
+        <td class="td-muted">{{ c.grupo.nome if c.grupo else '—' }}</td>
+        <td class="td-mono td-muted">{{ c.intervalo_segundos }}s</td>
+        <td>
+          {% if not c.ativo %}
+            <span class="badge badge-inativo">INATIVA</span>
+          {% elif c.ultimo_status.value == 'online' %}
+            <span class="badge badge-online">● ONLINE</span>
+          {% elif c.ultimo_status.value == 'offline' %}
+            <span class="badge badge-offline">● OFFLINE</span>
+          {% else %}
+            <span class="badge badge-desconhecido">? DESCONHECIDO</span>
+          {% endif %}
+        </td>
+        <td class="td-acoes">
+          <a href="{{ url_for('cadastro.camera_editar', id=c.id) }}" class="btn-acao">Editar</a>
+          <form method="POST" action="{{ url_for('cadastro.camera_toggle', id=c.id) }}">
+            <button type="submit" class="btn-acao">
+              {{ 'Desativar' if c.ativo else 'Ativar' }}
+            </button>
+          </form>
+          <form method="POST" action="{{ url_for('cadastro.camera_excluir', id=c.id) }}"
+                onsubmit="return confirm('Excluir câmera {{ c.nome }}? Todos os eventos serão removidos.')">
+            <button type="submit" class="btn-acao btn-acao-danger">Excluir</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="tabela-vazia">Nenhuma câmera encontrada para os filtros selecionados.</div>
+{% endif %}
+
+{% endblock %}

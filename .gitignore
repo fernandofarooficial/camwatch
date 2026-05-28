@@ -1,0 +1,9 @@
+.env
+.env.example
+*.pyc
+__pycache__/
+*.sock
+*.log
+venv/
+.idea/
+_doc/

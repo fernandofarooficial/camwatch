@@ -1,0 +1,20 @@
+[Unit]
+Description=CamWatch — Web (Gunicorn)
+After=network.target mysql.service
+
+[Service]
+User=workuser
+WorkingDirectory=/home/workuser/camwatch
+Environment="PATH=/home/workuser/camwatch/venv/bin"
+ExecStart=/home/workuser/camwatch/venv/bin/gunicorn \
+    --workers 3 \
+    --bind 0.0.0.0:5005 \
+    --timeout 60 \
+    --access-logfile /var/log/camwatch_access.log \
+    --error-logfile /var/log/camwatch_error.log \
+    wsgi:app
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

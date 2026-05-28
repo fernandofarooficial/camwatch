@@ -1,0 +1,47 @@
+{% extends "cadastro/base_cadastro.html" %}
+
+{% block cadastro_content %}
+
+<div class="form-card">
+  <h2 class="form-title">
+    {{ 'Editar empresa' if empresa else 'Nova empresa' }}
+  </h2>
+
+  <form method="POST">
+
+    <div class="form-row">
+      <label for="nome">Nome <span class="obrigatorio">*</span></label>
+      <input type="text" id="nome" name="nome"
+             value="{{ empresa.nome if empresa else '' }}"
+             placeholder="Razão social ou nome fantasia"
+             required maxlength="100">
+    </div>
+
+    <div class="form-row">
+      <label for="cnpj">CNPJ</label>
+      <input type="text" id="cnpj" name="cnpj"
+             value="{{ empresa.cnpj if empresa else '' }}"
+             placeholder="00.000.000/0000-00"
+             maxlength="18">
+    </div>
+
+    {% if empresa %}
+    <div class="form-row form-row-inline">
+      <label>
+        <input type="checkbox" name="ativo" {% if empresa.ativo %}checked{% endif %}>
+        Empresa ativa
+      </label>
+    </div>
+    {% endif %}
+
+    <div class="form-acoes">
+      <a href="{{ url_for('cadastro.empresas') }}" class="btn-cancelar">Cancelar</a>
+      <button type="submit" class="btn-salvar">
+        {{ 'Salvar alterações' if empresa else 'Cadastrar' }}
+      </button>
+    </div>
+
+  </form>
+</div>
+
+{% endblock %}
