@@ -32,4 +32,4 @@ class Config:
     # Checker
     CHECKER_WORKERS     = int(os.getenv("CHECKER_WORKERS",     "80"))   # threads simultâneas
     CHECKER_LOOP_SLEEP  = int(os.getenv("CHECKER_LOOP_SLEEP",  "10"))   # segundos entre varreduras
-    CHECKER_TIMEOUT_SEC = int(os.getenv("CHECKER_TIMEOUT_SEC", "10"))   # timeout por câmera
+    CHECKER_TIMEOUT_SEC = int(os.getenv("CHECKER_TIMEOUT_SEC", "20"))   # timeout por câmera

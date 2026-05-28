@@ -27,7 +27,7 @@ from sqlalchemy import text
 _SP = ZoneInfo("America/Sao_Paulo")
 
 # Debounce: exige N falhas consecutivas antes de marcar câmera como offline.
-_OFFLINE_DEBOUNCE = 2
+_OFFLINE_DEBOUNCE = 3
 _falhas: dict[int, int] = {}
 
 # Permite rodar como script autônomo ou importado pelo Flask
