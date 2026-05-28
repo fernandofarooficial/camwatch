@@ -21,6 +21,11 @@ from zoneinfo import ZoneInfo
 
 _SP = ZoneInfo("America/Sao_Paulo")
 
+# Debounce: exige N falhas consecutivas antes de marcar câmera como offline.
+# Evita "flapping" em câmeras que respondem no limite do timeout.
+_OFFLINE_DEBOUNCE = 2
+_falhas: dict[int, int] = {}  # {camera_id: contagem de falhas consecutivas}
+
 from sqlalchemy import text
 
 # Permite rodar como script autônomo ou importado pelo Flask
@@ -114,11 +119,21 @@ def processar_resultado(session, cam: dict, novo_status: str, agora: datetime):
         {"ts": agora, "id": camera_id},
     )
 
+    # Debounce offline: só confirma após _OFFLINE_DEBOUNCE falhas consecutivas
+    if novo_status == "online":
+        _falhas[camera_id] = 0
+    elif novo_status == "offline" and status_atual != "offline":
+        _falhas[camera_id] = _falhas.get(camera_id, 0) + 1
+        if _falhas[camera_id] < _OFFLINE_DEBOUNCE:
+            log.debug(f"Câmera {cam['nome']} (id={camera_id}): "
+                      f"falha {_falhas[camera_id]}/{_OFFLINE_DEBOUNCE}, aguardando confirmação.")
+            return
+
     # Sem mudança de estado — só atualiza timestamp
     if status_atual == novo_status:
         return
 
-    # --- Mudança de estado detectada ---
+    # --- Mudança de estado confirmada ---
     log.info(f"[MUDANÇA] Câmera {cam['nome']} (id={camera_id}): {status_atual} → {novo_status}")
 
     # Atualiza ultimo_status na camera
