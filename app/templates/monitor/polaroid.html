@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+
+{% block title %}Polaroid — CamWatch{% endblock %}
+{% block page_title %}Polaroid{% endblock %}
+
+{% block header_actions %}
+  <span class="last-update" id="last-update">—</span>
+{% endblock %}
+
+{% block content %}
+
+  <!-- Cards de resumo (atualizam a cada 30s) -->
+  <div id="cards-resumo"
+       hx-get="{{ url_for('monitor.resumo_parcial') }}"
+       hx-trigger="load, every 30s"
+       hx-swap="innerHTML">
+    {% include "partials/cards_resumo.html" %}
+  </div>
+
+  <!-- Filtros -->
+  <form class="filtros"
+        hx-get="{{ url_for('monitor.polaroid_parcial') }}"
+        hx-target="#grid-wrapper"
+        hx-trigger="change from:select, submit"
+        hx-swap="innerHTML"
+        hx-push-url="false">
+
+    <div class="filtro-grupo">
+      <label>Empresa</label>
+      <select name="empresa_id">
+        <option value="">Todas</option>
+        {% for e in empresas %}
+          <option value="{{ e.id }}" {% if empresa_id == e.id %}selected{% endif %}>
+            {{ e.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filtro-grupo">
+      <label>Grupo</label>
+      <select name="grupo_id">
+        <option value="">Todos</option>
+        {% for g in grupos %}
+          <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>
+            {{ g.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <button type="submit" class="btn-filtrar">Filtrar</button>
+  </form>
+
+  <!-- Grid de câmeras (atualiza a cada 30s) -->
+  <div id="grid-wrapper"
+       hx-get="{{ url_for('monitor.polaroid_parcial') }}{% if empresa_id or grupo_id %}?empresa_id={{ empresa_id or '' }}&grupo_id={{ grupo_id or '' }}{% endif %}"
+       hx-trigger="every 30s"
+       hx-swap="innerHTML">
+    {% include "partials/grid_cameras.html" %}
+  </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function atualizarHora() {
+    const el = document.getElementById('last-update');
+    if (el) el.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+  }
+  document.addEventListener('htmx:afterSwap', atualizarHora);
+  atualizarHora();
+</script>
+{% endblock %}

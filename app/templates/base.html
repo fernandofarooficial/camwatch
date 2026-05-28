@@ -25,8 +25,12 @@
     </div>
     <nav class="sidebar-nav">
       <a href="{{ url_for('monitor.index') }}"
-         class="nav-item {% if request.blueprint == 'monitor' %}active{% endif %}">
+         class="nav-item {% if request.endpoint == 'monitor.index' %}active{% endif %}">
         <span class="nav-icon">◉</span> Monitor
+      </a>
+      <a href="{{ url_for('monitor.polaroid') }}"
+         class="nav-item {% if request.endpoint and 'polaroid' in request.endpoint %}active{% endif %}">
+        <span class="nav-icon">◫</span> Polaroid
       </a>
       <a href="{{ url_for('cadastro.empresas') }}"
          class="nav-item {% if request.blueprint == 'cadastro' %}active{% endif %}">

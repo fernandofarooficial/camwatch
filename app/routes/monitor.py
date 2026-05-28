@@ -3,10 +3,16 @@ app/routes/monitor.py — CamWatch
 Blueprint da tela de monitoramento de eventos.
 """
 
-from flask import Blueprint, render_template, request
-from sqlalchemy import desc, text
+from datetime import datetime
+from zoneinfo import ZoneInfo
 
-from app.models import db, EventoCamera, Camera, GrupoCamera, Empresa
+from flask import Blueprint, render_template, request
+from sqlalchemy import desc, func, text
+from sqlalchemy.orm import joinedload
+
+from app.models import db, EventoCamera, Camera, GrupoCamera, Empresa, StatusCamera, StatusEvento
+
+_SP = ZoneInfo("America/Sao_Paulo")
 
 monitor_bp = Blueprint("monitor", __name__)
 
@@ -118,3 +124,96 @@ def resumo_parcial():
     """)).mappings().fetchone()
 
     return render_template("partials/cards_resumo.html", resumo=resumo)
+
+
+# ==================================================================
+# POLAROID — grade com status atual de cada câmera
+# ==================================================================
+
+def _query_cameras_polaroid(empresa_id=None, grupo_id=None):
+    """Retorna (cameras, offline_desde) com filtros opcionais."""
+    q = (Camera.query
+         .filter_by(ativo=True)
+         .join(Camera.empresa)
+         .options(joinedload(Camera.grupo)))
+    if empresa_id:
+        q = q.filter(Camera.empresa_id == empresa_id)
+    if grupo_id:
+        q = q.filter(Camera.grupo_id == grupo_id)
+    cameras = q.order_by(Empresa.nome, Camera.nome).all()
+
+    # Timestamp do último evento offline para câmeras atualmente offline
+    offline_ids = [c.id for c in cameras if c.ultimo_status == StatusCamera.offline]
+    offline_desde = {}
+    if offline_ids:
+        rows = (
+            db.session.query(
+                EventoCamera.camera_id,
+                func.max(EventoCamera.timestamp).label("ts"),
+            )
+            .filter(
+                EventoCamera.camera_id.in_(offline_ids),
+                EventoCamera.status == StatusEvento.offline,
+            )
+            .group_by(EventoCamera.camera_id)
+            .all()
+        )
+        offline_desde = {r.camera_id: r.ts for r in rows}
+
+    return cameras, offline_desde
+
+
+def _resumo_sql():
+    return db.session.execute(text("""
+        SELECT
+            SUM(ativo = TRUE AND ultimo_status = 'online')       AS online,
+            SUM(ativo = TRUE AND ultimo_status = 'offline')      AS offline,
+            SUM(ativo = TRUE AND ultimo_status = 'desconhecido') AS desconhecido,
+            SUM(ativo = TRUE)                                    AS total
+        FROM camera
+    """)).mappings().fetchone()
+
+
+@monitor_bp.route("/polaroid")
+def polaroid():
+    """Tela Polaroid — situação atual de cada câmera em cards."""
+    empresas = Empresa.query.filter_by(ativo=True).order_by(Empresa.nome).all()
+    grupos   = GrupoCamera.query.order_by(GrupoCamera.nome).all()
+
+    empresa_id = request.args.get("empresa_id", type=int)
+    grupo_id   = request.args.get("grupo_id",   type=int)
+
+    cameras, offline_desde = _query_cameras_polaroid(empresa_id, grupo_id)
+    agora  = datetime.now(_SP).replace(tzinfo=None)
+    resumo = _resumo_sql()
+
+    return render_template(
+        "monitor/polaroid.html",
+        empresas=empresas,
+        grupos=grupos,
+        cameras=cameras,
+        offline_desde=offline_desde,
+        empresa_id=empresa_id,
+        grupo_id=grupo_id,
+        agora=agora,
+        resumo=resumo,
+    )
+
+
+@monitor_bp.route("/polaroid/parcial")
+def polaroid_parcial():
+    """Endpoint HTMX — atualiza o grid de câmeras."""
+    empresa_id = request.args.get("empresa_id", type=int)
+    grupo_id   = request.args.get("grupo_id",   type=int)
+
+    cameras, offline_desde = _query_cameras_polaroid(empresa_id, grupo_id)
+    agora = datetime.now(_SP).replace(tzinfo=None)
+
+    return render_template(
+        "partials/grid_cameras.html",
+        cameras=cameras,
+        offline_desde=offline_desde,
+        empresa_id=empresa_id,
+        grupo_id=grupo_id,
+        agora=agora,
+    )
