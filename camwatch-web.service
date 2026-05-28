@@ -8,7 +8,7 @@ WorkingDirectory=/home/workuser/camwatch
 Environment="PATH=/home/workuser/camwatch/venv/bin"
 ExecStart=/home/workuser/camwatch/venv/bin/gunicorn \
     --workers 3 \
-    --bind 127.0.0.1:5006 \
+    --bind 0.0.0.0:5005 \
     --timeout 60 \
     --access-logfile /var/log/camwatch_access.log \
     --error-logfile /var/log/camwatch_error.log \
