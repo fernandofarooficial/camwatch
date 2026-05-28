@@ -5,7 +5,7 @@ After=network.target mysql.service
 [Service]
 User=workuser
 WorkingDirectory=/home/workuser/camwatch
-Environment="PATH=/home/workuser/camwatch/venv/bin"
+Environment="PATH=/home/workuser/camwatch/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=/home/workuser/camwatch/venv/bin/python checker/service.py
 Restart=always
 RestartSec=10
