@@ -40,6 +40,14 @@
              maxlength="255">
     </div>
 
+    <div class="form-row">
+      <label for="telegram">Telegram <span class="form-hint">(chat_id para notificações)</span></label>
+      <input type="text" id="telegram" name="telegram"
+             value="{{ grupo.telegram if grupo else '' }}"
+             placeholder="Ex: -1001234567890"
+             maxlength="20">
+    </div>
+
     <div class="form-acoes">
       <a href="{{ url_for('cadastro.grupos') }}" class="btn-cancelar">Cancelar</a>
       <button type="submit" class="btn-salvar">

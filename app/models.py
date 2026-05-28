@@ -77,6 +77,7 @@ class GrupoCamera(db.Model):
     nome       = db.Column(db.String(100), nullable=False)
     empresa_id = db.Column(db.Integer,     db.ForeignKey("empresa.id"), nullable=False)
     descricao  = db.Column(db.String(255))
+    telegram   = db.Column(db.String(20),  nullable=True)
 
     # relacionamentos
     empresa = db.relationship("Empresa", back_populates="grupos")

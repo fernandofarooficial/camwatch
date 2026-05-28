@@ -86,10 +86,11 @@ def grupo_novo():
         nome       = request.form.get("nome", "").strip()
         empresa_id = request.form.get("empresa_id", type=int)
         descricao  = request.form.get("descricao", "").strip() or None
+        telegram   = request.form.get("telegram",  "").strip() or None
         if not nome or not empresa_id:
             flash("Nome e empresa são obrigatórios.", "erro")
             return render_template("cadastro/grupo_form.html", grupo=None, empresas=empresas)
-        db.session.add(GrupoCamera(nome=nome, empresa_id=empresa_id, descricao=descricao))
+        db.session.add(GrupoCamera(nome=nome, empresa_id=empresa_id, descricao=descricao, telegram=telegram))
         db.session.commit()
         flash("Grupo cadastrado com sucesso.", "ok")
         return redirect(url_for("cadastro.grupos"))
@@ -109,6 +110,7 @@ def grupo_editar(id):
         grupo.nome       = nome
         grupo.empresa_id = empresa_id
         grupo.descricao  = request.form.get("descricao", "").strip() or None
+        grupo.telegram   = request.form.get("telegram",  "").strip() or None
         db.session.commit()
         flash("Grupo atualizado.", "ok")
         return redirect(url_for("cadastro.grupos"))

@@ -15,6 +15,7 @@
         <th>Nome</th>
         <th>Empresa</th>
         <th>Descrição</th>
+        <th>Telegram</th>
         <th>Câmeras</th>
         <th>Ações</th>
       </tr>
@@ -25,6 +26,7 @@
         <td>{{ g.nome }}</td>
         <td class="td-muted">{{ g.empresa.nome }}</td>
         <td class="td-muted">{{ g.descricao or '—' }}</td>
+        <td class="td-mono">{{ g.telegram or '—' }}</td>
         <td class="td-mono">{{ g.cameras.count() }}</td>
         <td class="td-acoes">
           <a href="{{ url_for('cadastro.grupo_editar', id=g.id) }}" class="btn-acao">Editar</a>
