@@ -130,7 +130,7 @@ def resumo_parcial():
 # POLAROID — grade com status atual de cada câmera
 # ==================================================================
 
-def _query_cameras_polaroid(empresa_id=None, grupo_id=None):
+def _query_cameras_polaroid(empresa_id=None, grupo_id=None, status=None):
     """Retorna (cameras, offline_desde) com filtros opcionais."""
     q = (Camera.query
          .filter_by(ativo=True)
@@ -140,6 +140,8 @@ def _query_cameras_polaroid(empresa_id=None, grupo_id=None):
         q = q.filter(Camera.empresa_id == empresa_id)
     if grupo_id:
         q = q.filter(Camera.grupo_id == grupo_id)
+    if status in ("online", "offline"):
+        q = q.filter(Camera.ultimo_status == StatusCamera[status])
     cameras = q.order_by(Empresa.nome, Camera.nome).all()
 
     # Timestamp do último evento offline para câmeras atualmente offline
@@ -182,8 +184,9 @@ def polaroid():
 
     empresa_id = request.args.get("empresa_id", type=int)
     grupo_id   = request.args.get("grupo_id",   type=int)
+    status     = request.args.get("status",     "")
 
-    cameras, offline_desde = _query_cameras_polaroid(empresa_id, grupo_id)
+    cameras, offline_desde = _query_cameras_polaroid(empresa_id, grupo_id, status)
     agora  = datetime.now(_SP).replace(tzinfo=None)
     resumo = _resumo_sql()
 
@@ -195,6 +198,7 @@ def polaroid():
         offline_desde=offline_desde,
         empresa_id=empresa_id,
         grupo_id=grupo_id,
+        status=status,
         agora=agora,
         resumo=resumo,
     )
@@ -205,8 +209,9 @@ def polaroid_parcial():
     """Endpoint HTMX — atualiza o grid de câmeras."""
     empresa_id = request.args.get("empresa_id", type=int)
     grupo_id   = request.args.get("grupo_id",   type=int)
+    status     = request.args.get("status",     "")
 
-    cameras, offline_desde = _query_cameras_polaroid(empresa_id, grupo_id)
+    cameras, offline_desde = _query_cameras_polaroid(empresa_id, grupo_id, status)
     agora = datetime.now(_SP).replace(tzinfo=None)
 
     return render_template(
@@ -215,5 +220,6 @@ def polaroid_parcial():
         offline_desde=offline_desde,
         empresa_id=empresa_id,
         grupo_id=grupo_id,
+        status=status,
         agora=agora,
     )

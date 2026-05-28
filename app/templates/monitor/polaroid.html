@@ -49,12 +49,22 @@
       </select>
     </div>
 
+    <div class="filtro-grupo">
+      <label>Status</label>
+      <select name="status">
+        <option value=""    {% if not status %}selected{% endif %}>Todas</option>
+        <option value="online"  {% if status == 'online'  %}selected{% endif %}>Online</option>
+        <option value="offline" {% if status == 'offline' %}selected{% endif %}>Offline</option>
+      </select>
+    </div>
+
     <button type="submit" class="btn-filtrar">Filtrar</button>
   </form>
 
   <!-- Grid de câmeras (atualiza a cada 30s) -->
+  {% set qs = '?empresa_id=' ~ (empresa_id or '') ~ '&grupo_id=' ~ (grupo_id or '') ~ '&status=' ~ (status or '') %}
   <div id="grid-wrapper"
-       hx-get="{{ url_for('monitor.polaroid_parcial') }}{% if empresa_id or grupo_id %}?empresa_id={{ empresa_id or '' }}&grupo_id={{ grupo_id or '' }}{% endif %}"
+       hx-get="{{ url_for('monitor.polaroid_parcial') ~ qs }}"
        hx-trigger="every 30s"
        hx-swap="innerHTML">
     {% include "partials/grid_cameras.html" %}
