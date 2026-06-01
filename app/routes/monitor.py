@@ -3,7 +3,7 @@ app/routes/monitor.py — CamWatch
 Blueprint da tela de monitoramento de eventos.
 """
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from flask import Blueprint, render_template, request
@@ -202,6 +202,80 @@ def polaroid():
         agora=agora,
         resumo=resumo,
     )
+
+
+@monitor_bp.route("/numeros")
+def numeros():
+    """Tela Números — estatísticas de offline por empresa nas últimas 120h."""
+    limite = datetime.now(_SP).replace(tzinfo=None) - timedelta(hours=120)
+
+    stats = db.session.execute(text("""
+        SELECT
+            e.id   AS empresa_id,
+            e.nome AS empresa_nome,
+
+            (SELECT COUNT(*)
+             FROM camera c
+             WHERE c.empresa_id = e.id AND c.ativo = TRUE)
+                AS total_cameras,
+
+            (SELECT COUNT(DISTINCT ev.camera_id)
+             FROM evento_camera ev
+             JOIN camera c ON c.id = ev.camera_id
+             WHERE c.empresa_id = e.id
+               AND ev.status = 'offline'
+               AND ev.timestamp >= :limite)
+                AS cameras_com_offline,
+
+            (SELECT COUNT(*)
+             FROM evento_camera ev
+             JOIN camera c ON c.id = ev.camera_id
+             WHERE c.empresa_id = e.id
+               AND ev.status = 'offline'
+               AND ev.timestamp >= :limite)
+                AS total_vezes_offline,
+
+            (SELECT AVG(ev.duracao_offline_segundos)
+             FROM evento_camera ev
+             JOIN camera c ON c.id = ev.camera_id
+             WHERE c.empresa_id = e.id
+               AND ev.duracao_offline_segundos IS NOT NULL
+               AND ev.timestamp >= :limite)
+                AS tempo_medio_offline_seg,
+
+            (SELECT COUNT(*)
+             FROM evento_camera ev
+             JOIN camera c ON c.id = ev.camera_id
+             WHERE c.empresa_id = e.id
+               AND ev.duracao_offline_segundos IS NOT NULL
+               AND ev.duracao_offline_segundos < 180
+               AND ev.timestamp >= :limite)
+                AS offline_menos_3min,
+
+            (SELECT COUNT(*)
+             FROM evento_camera ev
+             JOIN camera c ON c.id = ev.camera_id
+             WHERE c.empresa_id = e.id
+               AND ev.duracao_offline_segundos IS NOT NULL
+               AND ev.duracao_offline_segundos < 300
+               AND ev.timestamp >= :limite)
+                AS offline_menos_5min,
+
+            (SELECT COUNT(*)
+             FROM evento_camera ev
+             JOIN camera c ON c.id = ev.camera_id
+             WHERE c.empresa_id = e.id
+               AND ev.duracao_offline_segundos IS NOT NULL
+               AND ev.duracao_offline_segundos < 600
+               AND ev.timestamp >= :limite)
+                AS offline_menos_10min
+
+        FROM empresa e
+        WHERE e.ativo = TRUE
+        ORDER BY e.nome
+    """), {"limite": limite}).mappings().fetchall()
+
+    return render_template("monitor/numeros.html", stats=stats, limite=limite)
 
 
 @monitor_bp.route("/polaroid/parcial")

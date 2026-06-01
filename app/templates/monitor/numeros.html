@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+
+{% block title %}Números — CamWatch{% endblock %}
+{% block page_title %}Números{% endblock %}
+
+{% block header_actions %}
+  <span class="last-update">Últimas 120 h — desde {{ limite.strftime('%d/%m/%Y %H:%M') }}</span>
+{% endblock %}
+
+{% macro fmt_dur(seg) %}
+{%- if seg is none or seg == 0 -%}—
+{%- else -%}
+  {%- set s = seg | int -%}
+  {%- if s >= 3600 -%}{{ s // 3600 }}h {{ (s % 3600) // 60 }}min
+  {%- elif s >= 60 -%}{{ s // 60 }}min {{ s % 60 }}s
+  {%- else -%}{{ s }}s
+  {%- endif -%}
+{%- endif %}
+{% endmacro %}
+
+{% block content %}
+
+  {% if stats %}
+  <div class="tabela-wrapper">
+    <table class="tabela-eventos numeros-tabela">
+      <thead>
+        <tr>
+          <th>Empresa</th>
+          <th class="th-num">Total câmeras</th>
+          <th class="th-num">Ficaram offline</th>
+          <th class="th-num">Eventos offline</th>
+          <th class="th-num">Duração média</th>
+          <th class="th-num">< 3 min</th>
+          <th class="th-num">< 5 min</th>
+          <th class="th-num">< 10 min</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in stats %}
+        <tr>
+          <td class="td-empresa-nome">{{ row.empresa_nome }}</td>
+
+          <td class="td-mono td-num">{{ row.total_cameras }}</td>
+
+          <td class="td-mono td-num {% if row.cameras_com_offline > 0 %}td-num-warn{% endif %}">
+            {{ row.cameras_com_offline }}
+            {% if row.total_cameras and row.total_cameras > 0 %}
+              <span class="num-pct">({{ ((row.cameras_com_offline / row.total_cameras) * 100) | int }}%)</span>
+            {% endif %}
+          </td>
+
+          <td class="td-mono td-num {% if row.total_vezes_offline > 0 %}td-num-warn{% endif %}">
+            {{ row.total_vezes_offline }}
+          </td>
+
+          <td class="td-mono td-num">{{ fmt_dur(row.tempo_medio_offline_seg) }}</td>
+
+          <td class="td-mono td-num">{{ row.offline_menos_3min }}</td>
+          <td class="td-mono td-num">{{ row.offline_menos_5min }}</td>
+          <td class="td-mono td-num">{{ row.offline_menos_10min }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="tabela-vazia">Nenhuma empresa cadastrada.</div>
+  {% endif %}
+
+{% endblock %}

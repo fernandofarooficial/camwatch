@@ -596,3 +596,22 @@ select option { background: var(--bg3); }
   font-size: 11px;
   color: var(--text3);
 }
+
+/* ------ Números — estatísticas de offline por empresa ----- */
+.numeros-tabela .th-num,
+.numeros-tabela .td-num {
+  text-align: right;
+  padding-right: 22px;
+}
+.numeros-tabela .td-empresa-nome {
+  font-weight: 500;
+  min-width: 180px;
+}
+.td-num-warn {
+  color: var(--amber);
+}
+.num-pct {
+  font-size: 10px;
+  color: var(--text3);
+  margin-left: 4px;
+}

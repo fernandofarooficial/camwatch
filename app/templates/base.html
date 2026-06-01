@@ -32,6 +32,10 @@
          class="nav-item {% if request.endpoint and 'polaroid' in request.endpoint %}active{% endif %}">
         <span class="nav-icon">◫</span> Polaroid
       </a>
+      <a href="{{ url_for('monitor.numeros') }}"
+         class="nav-item {% if request.endpoint == 'monitor.numeros' %}active{% endif %}">
+        <span class="nav-icon">◎</span> Números
+      </a>
       <a href="{{ url_for('cadastro.empresas') }}"
          class="nav-item {% if request.blueprint == 'cadastro' %}active{% endif %}">
         <span class="nav-icon">◈</span> Cadastros
