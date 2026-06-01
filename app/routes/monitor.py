@@ -22,23 +22,30 @@ PAGE_SIZE = 50
 def _query_eventos(empresa_id=None, grupo_id=None, camera_id=None, page=1):
     """
     Retorna (eventos, total, paginas) com filtros opcionais.
+    Count e dados em queries separadas para não degradar o COUNT com joinedload.
     """
-    q = (
-        db.session.query(EventoCamera)
-        .join(EventoCamera.camera)
-        .join(Camera.empresa)
-        .order_by(desc(EventoCamera.timestamp))
-    )
+    def _base(with_load=False):
+        q = (
+            db.session.query(EventoCamera)
+            .join(EventoCamera.camera)
+            .join(Camera.empresa)
+            .order_by(desc(EventoCamera.timestamp))
+        )
+        if with_load:
+            q = q.options(
+                joinedload(EventoCamera.camera).joinedload(Camera.empresa),
+                joinedload(EventoCamera.camera).joinedload(Camera.grupo),
+            )
+        if empresa_id:
+            q = q.filter(Camera.empresa_id == empresa_id)
+        if grupo_id:
+            q = q.filter(Camera.grupo_id == grupo_id)
+        if camera_id:
+            q = q.filter(EventoCamera.camera_id == camera_id)
+        return q
 
-    if empresa_id:
-        q = q.filter(Camera.empresa_id == empresa_id)
-    if grupo_id:
-        q = q.filter(Camera.grupo_id == grupo_id)
-    if camera_id:
-        q = q.filter(EventoCamera.camera_id == camera_id)
-
-    total   = q.count()
-    eventos = q.offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).all()
+    total   = _base().count()
+    eventos = _base(with_load=True).offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).all()
     paginas = (total + PAGE_SIZE - 1) // PAGE_SIZE
 
     return eventos, total, paginas
@@ -135,7 +142,10 @@ def _query_cameras_polaroid(empresa_id=None, grupo_id=None, status=None):
     q = (Camera.query
          .filter_by(ativo=True)
          .join(Camera.empresa)
-         .options(joinedload(Camera.grupo)))
+         .options(
+             joinedload(Camera.empresa),
+             joinedload(Camera.grupo),
+         ))
     if empresa_id:
         q = q.filter(Camera.empresa_id == empresa_id)
     if grupo_id:
@@ -209,31 +219,21 @@ def numeros():
     """Tela Números — estatísticas de offline por empresa nas últimas 120h."""
     limite = datetime.now(_SP).replace(tzinfo=None) - timedelta(hours=120)
 
-    # CTE ancora tudo nos eventos OFFLINE que iniciaram na janela.
-    # Para cada evento offline buscamos a duração gravada no próximo evento
-    # online da mesma câmera (NULL se ainda está offline).
-    # Assim total_vezes_offline, tempo_medio e contadores <Xmin operam
-    # sobre o mesmo conjunto de incidentes — sem misturar eventos offline
-    # com eventos de retorno (que é o que gerava números inconsistentes).
+    # LEAD() lê a duracao_offline_segundos do próximo evento (online) da
+    # mesma câmera sem subquery correlacionada — scan único na janela.
     stats = db.session.execute(text("""
-        WITH incidentes AS (
+        WITH cam_events AS (
             SELECT
                 ev.id,
                 ev.camera_id,
                 c.empresa_id,
-                (
-                    SELECT r.duracao_offline_segundos
-                    FROM evento_camera r
-                    WHERE r.camera_id = ev.camera_id
-                      AND r.status   = 'online'
-                      AND r.timestamp > ev.timestamp
-                    ORDER BY r.timestamp ASC
-                    LIMIT 1
-                ) AS duracao_seg
+                ev.status,
+                LEAD(ev.duracao_offline_segundos)
+                    OVER (PARTITION BY ev.camera_id ORDER BY ev.timestamp)
+                    AS duracao_seg
             FROM evento_camera ev
             JOIN camera c ON c.id = ev.camera_id
-            WHERE ev.status     = 'offline'
-              AND ev.timestamp >= :limite
+            WHERE ev.timestamp >= :limite
         )
         SELECT
             e.id   AS empresa_id,
@@ -251,16 +251,16 @@ def numeros():
                AND c.ultimo_status = 'offline')
                 AS cameras_offline_agora,
 
-            COUNT(DISTINCT i.camera_id)  AS cameras_com_offline,
-            COUNT(i.id)                  AS total_vezes_offline,
-            AVG(i.duracao_seg)           AS tempo_medio_offline_seg,
+            COUNT(DISTINCT ce.camera_id)  AS cameras_com_offline,
+            COUNT(ce.id)                  AS total_vezes_offline,
+            AVG(ce.duracao_seg)           AS tempo_medio_offline_seg,
 
-            SUM(i.duracao_seg < 180) AS offline_menos_3min,
-            SUM(i.duracao_seg < 300) AS offline_menos_5min,
-            SUM(i.duracao_seg < 600) AS offline_menos_10min
+            SUM(ce.duracao_seg < 180) AS offline_menos_3min,
+            SUM(ce.duracao_seg < 300) AS offline_menos_5min,
+            SUM(ce.duracao_seg < 600) AS offline_menos_10min
 
         FROM empresa e
-        LEFT JOIN incidentes i ON i.empresa_id = e.id
+        LEFT JOIN cam_events ce ON ce.empresa_id = e.id AND ce.status = 'offline'
         WHERE e.ativo = TRUE
         GROUP BY e.id, e.nome
         ORDER BY e.nome
@@ -275,24 +275,17 @@ def numeros_detalhe(empresa_id):
     limite = datetime.now(_SP).replace(tzinfo=None) - timedelta(hours=120)
 
     cameras = db.session.execute(text("""
-        WITH incidentes AS (
+        WITH cam_events AS (
             SELECT
                 ev.id,
                 ev.camera_id,
-                ev.timestamp AS ts_offline,
-                (
-                    SELECT r.duracao_offline_segundos
-                    FROM evento_camera r
-                    WHERE r.camera_id = ev.camera_id
-                      AND r.status   = 'online'
-                      AND r.timestamp > ev.timestamp
-                    ORDER BY r.timestamp ASC
-                    LIMIT 1
-                ) AS duracao_seg
+                ev.status,
+                LEAD(ev.duracao_offline_segundos)
+                    OVER (PARTITION BY ev.camera_id ORDER BY ev.timestamp)
+                    AS duracao_seg
             FROM evento_camera ev
             JOIN camera c ON c.id = ev.camera_id
-            WHERE ev.status     = 'offline'
-              AND ev.timestamp >= :limite
+            WHERE ev.timestamp >= :limite
               AND c.empresa_id  = :empresa_id
         )
         SELECT
@@ -300,14 +293,14 @@ def numeros_detalhe(empresa_id):
             c.nome          AS camera_nome,
             g.nome          AS grupo_nome,
             c.ultimo_status AS status_atual,
-            COUNT(i.id)              AS total_vezes_offline,
-            AVG(i.duracao_seg)       AS tempo_medio_seg,
-            SUM(i.duracao_seg < 180) AS menos_3min,
-            SUM(i.duracao_seg < 300) AS menos_5min,
-            SUM(i.duracao_seg < 600) AS menos_10min
+            COUNT(ce.id)              AS total_vezes_offline,
+            AVG(ce.duracao_seg)       AS tempo_medio_seg,
+            SUM(ce.duracao_seg < 180) AS menos_3min,
+            SUM(ce.duracao_seg < 300) AS menos_5min,
+            SUM(ce.duracao_seg < 600) AS menos_10min
         FROM camera c
-        LEFT JOIN grupo_camera g       ON g.id = c.grupo_id
-        LEFT JOIN incidentes   i       ON i.camera_id = c.id
+        LEFT JOIN grupo_camera g  ON g.id = c.grupo_id
+        LEFT JOIN cam_events   ce ON ce.camera_id = c.id AND ce.status = 'offline'
         WHERE c.empresa_id = :empresa_id AND c.ativo = TRUE
         GROUP BY c.id, c.nome, g.nome, c.ultimo_status
         ORDER BY total_vezes_offline DESC, c.nome
