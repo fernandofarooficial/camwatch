@@ -25,6 +25,7 @@
     <table class="tabela-eventos numeros-tabela">
       <thead>
         <tr>
+          <th></th>
           <th>Empresa</th>
           <th class="th-num">Total câmeras</th>
           <th class="th-num">Offline agora</th>
@@ -38,7 +39,10 @@
       </thead>
       <tbody>
         {% for row in stats %}
-        <tr>
+        <tr class="numeros-row" onclick="toggleDetalhe({{ row.empresa_id }})">
+          <td class="td-expand">
+            <span class="expand-icon" id="icon-{{ row.empresa_id }}">▶</span>
+          </td>
           <td class="td-empresa-nome">{{ row.empresa_nome }}</td>
 
           <td class="td-mono td-num">{{ row.total_cameras }}</td>
@@ -60,9 +64,17 @@
 
           <td class="td-mono td-num">{{ fmt_dur(row.tempo_medio_offline_seg) }}</td>
 
-          <td class="td-mono td-num">{{ row.offline_menos_3min }}</td>
-          <td class="td-mono td-num">{{ row.offline_menos_5min }}</td>
-          <td class="td-mono td-num">{{ row.offline_menos_10min }}</td>
+          <td class="td-mono td-num">{{ row.offline_menos_3min or 0 }}</td>
+          <td class="td-mono td-num">{{ row.offline_menos_5min or 0 }}</td>
+          <td class="td-mono td-num">{{ row.offline_menos_10min or 0 }}</td>
+        </tr>
+        <tr id="detalhe-{{ row.empresa_id }}" class="numeros-detalhe-row" style="display:none">
+          <td colspan="10"
+              hx-get="{{ url_for('monitor.numeros_detalhe', empresa_id=row.empresa_id) }}"
+              hx-trigger="revealed"
+              hx-swap="innerHTML"
+              class="detalhe-cell">
+          </td>
         </tr>
         {% endfor %}
       </tbody>
@@ -72,4 +84,20 @@
   <div class="tabela-vazia">Nenhuma empresa cadastrada.</div>
   {% endif %}
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function toggleDetalhe(id) {
+    const row  = document.getElementById('detalhe-' + id);
+    const icon = document.getElementById('icon-' + id);
+    if (row.style.display === 'none') {
+      row.style.display = '';
+      icon.textContent  = '▼';
+    } else {
+      row.style.display = 'none';
+      icon.textContent  = '▶';
+    }
+  }
+</script>
 {% endblock %}

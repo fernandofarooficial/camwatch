@@ -599,7 +599,9 @@ select option { background: var(--bg3); }
 
 /* ------ Números — estatísticas de offline por empresa ----- */
 .numeros-tabela .th-num,
-.numeros-tabela .td-num {
+.numeros-tabela .td-num,
+.detalhe-tabela  .th-num,
+.detalhe-tabela  .td-num {
   text-align: right;
   padding-right: 22px;
 }
@@ -607,14 +609,50 @@ select option { background: var(--bg3); }
   font-weight: 500;
   min-width: 180px;
 }
-.td-num-warn {
-  color: var(--amber);
-}
-.td-num-offline {
-  color: var(--red);
-}
+.td-num-warn    { color: var(--amber); }
+.td-num-offline { color: var(--red); }
 .num-pct {
   font-size: 10px;
   color: var(--text3);
   margin-left: 4px;
 }
+
+/* Linha expansível */
+.numeros-row { cursor: pointer; }
+.numeros-row:hover { background: var(--bg3); }
+.td-expand {
+  width: 28px;
+  padding-right: 0;
+  color: var(--text3);
+}
+.expand-icon { font-size: 10px; }
+
+/* Detalhe por câmera */
+.numeros-detalhe-row td { padding: 0; }
+.detalhe-cell { padding: 0 !important; }
+.detalhe-cameras {
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+  padding: 16px 16px 16px 40px;
+}
+.detalhe-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.detalhe-tabela thead tr {
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+}
+.detalhe-tabela th {
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text3);
+  font-weight: 500;
+}
+.detalhe-tabela tbody tr { border-bottom: 1px solid var(--border); }
+.detalhe-tabela tbody tr:last-child { border-bottom: none; }
+.detalhe-tabela td { padding: 8px 12px; color: var(--text); vertical-align: middle; }
