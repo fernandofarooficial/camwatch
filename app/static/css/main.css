@@ -610,6 +610,9 @@ select option { background: var(--bg3); }
 .td-num-warn {
   color: var(--amber);
 }
+.td-num-offline {
+  color: var(--red);
+}
 .num-pct {
   font-size: 10px;
   color: var(--text3);

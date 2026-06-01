@@ -27,6 +27,7 @@
         <tr>
           <th>Empresa</th>
           <th class="th-num">Total câmeras</th>
+          <th class="th-num">Offline agora</th>
           <th class="th-num">Ficaram offline</th>
           <th class="th-num">Eventos offline</th>
           <th class="th-num">Duração média</th>
@@ -41,6 +42,10 @@
           <td class="td-empresa-nome">{{ row.empresa_nome }}</td>
 
           <td class="td-mono td-num">{{ row.total_cameras }}</td>
+
+          <td class="td-mono td-num {% if row.cameras_offline_agora > 0 %}td-num-offline{% endif %}">
+            {{ row.cameras_offline_agora }}
+          </td>
 
           <td class="td-mono td-num {% if row.cameras_com_offline > 0 %}td-num-warn{% endif %}">
             {{ row.cameras_com_offline }}

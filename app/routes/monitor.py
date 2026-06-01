@@ -235,6 +235,13 @@ def numeros():
                AND ev.timestamp >= :limite)
                 AS total_vezes_offline,
 
+            (SELECT COUNT(*)
+             FROM camera c
+             WHERE c.empresa_id = e.id
+               AND c.ativo = TRUE
+               AND c.ultimo_status = 'offline')
+                AS cameras_offline_agora,
+
             (SELECT AVG(ev.duracao_offline_segundos)
              FROM evento_camera ev
              JOIN camera c ON c.id = ev.camera_id
