@@ -88,6 +88,14 @@
 
 {% block scripts %}
 <script>
+  function syncExpandURL() {
+    const abertos = [];
+    document.querySelectorAll('.numeros-detalhe-row').forEach(row => {
+      if (row.style.display !== 'none') abertos.push(row.id.replace('detalhe-', ''));
+    });
+    history.replaceState(null, '', location.pathname + (abertos.length ? '#' + abertos.join(',') : ''));
+  }
+
   function toggleDetalhe(id) {
     const row  = document.getElementById('detalhe-' + id);
     const icon = document.getElementById('icon-' + id);
@@ -98,6 +106,18 @@
       row.style.display = 'none';
       icon.textContent  = '▶';
     }
+    syncExpandURL();
   }
+
+  // Restaura linhas expandidas a partir do hash da URL
+  (function() {
+    const hash = location.hash.slice(1);
+    if (!hash) return;
+    hash.split(',').forEach(id => {
+      const row  = document.getElementById('detalhe-' + id);
+      const icon = document.getElementById('icon-' + id);
+      if (row) { row.style.display = ''; if (icon) icon.textContent = '▼'; }
+    });
+  })();
 </script>
 {% endblock %}

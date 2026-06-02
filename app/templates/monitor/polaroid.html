@@ -80,5 +80,20 @@
   }
   document.addEventListener('htmx:afterSwap', atualizarHora);
   atualizarHora();
+
+  function syncFiltros() {
+    const form = document.querySelector('form.filtros');
+    if (!form) return;
+    const params = new URLSearchParams();
+    new FormData(form).forEach((val, key) => { if (val) params.set(key, val); });
+    const qs = params.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+    const wrapper = document.getElementById('grid-wrapper');
+    if (wrapper) {
+      wrapper.setAttribute('hx-get', form.getAttribute('hx-get') + (qs ? '?' + qs : ''));
+    }
+  }
+  document.querySelector('form.filtros')?.addEventListener('change', syncFiltros);
+  document.querySelector('form.filtros')?.addEventListener('submit', syncFiltros);
 </script>
 {% endblock %}
