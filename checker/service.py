@@ -28,7 +28,13 @@ _SP = ZoneInfo("America/Sao_Paulo")
 
 # Debounce: exige N falhas consecutivas antes de marcar câmera como offline.
 _OFFLINE_DEBOUNCE = 3
-_falhas: dict[int, int] = {}
+
+# Notificação Telegram só após câmera ficar offline por este tempo.
+_NOTIF_THRESHOLD_SEC = 600  # 10 minutos
+
+_falhas:             dict[int, int]      = {}
+_offline_desde:      dict[int, datetime] = {}  # camera_id → quando confirmou offline
+_offline_notificado: dict[int, bool]     = {}  # camera_id → se já enviou o alerta
 
 # Permite rodar como script autônomo ou importado pelo Flask
 import os
@@ -158,7 +164,10 @@ def processar_resultado(session, cam: dict, novo_status: str, agora: datetime) -
                       f"falha {_falhas[camera_id]}/{_OFFLINE_DEBOUNCE}, aguardando confirmação.")
             return None
 
+    # Sem mudança de estado — verifica se notificação de 10 min está pendente
     if status_atual == novo_status:
+        if novo_status == "offline":
+            return _verificar_notif_offline_pendente(cam, agora)
         return None
 
     log.info(f"[MUDANÇA] Câmera {cam['nome']} (id={camera_id}): {status_atual} → {novo_status}")
@@ -179,18 +188,20 @@ def processar_resultado(session, cam: dict, novo_status: str, agora: datetime) -
         duracao_offline_segundos=duracao,
     ))
 
-    # Prepara notificação se o grupo tiver telegram configurado
     telegram = cam.get("grupo_telegram")
-    if telegram:
-        hora = agora.strftime("%d/%m/%Y %H:%M:%S")
-        if novo_status == "offline":
-            mensagem = (
-                f"🔴 CÂMERA OFFLINE\n\n"
-                f"📷 {cam['nome']}\n"
-                f"🏢 {cam['empresa_nome']}\n"
-                f"🕒 {hora}"
-            )
-        else:
+
+    if novo_status == "offline":
+        # Registra início do offline; notificação só após _NOTIF_THRESHOLD_SEC
+        _offline_desde[camera_id]      = agora
+        _offline_notificado[camera_id] = False
+        return None
+
+    if novo_status == "online":
+        notificado = _offline_notificado.pop(camera_id, False)
+        _offline_desde.pop(camera_id, None)
+        # Envia recuperação apenas se o alerta de offline foi enviado
+        if telegram and notificado:
+            hora = agora.strftime("%d/%m/%Y %H:%M:%S")
             mensagem = (
                 f"🟢 CÂMERA ONLINE\n\n"
                 f"📷 {cam['nome']}\n"
@@ -198,9 +209,38 @@ def processar_resultado(session, cam: dict, novo_status: str, agora: datetime) -
                 f"⏱ Offline por: {_formatar_duracao(duracao)}\n"
                 f"🕒 {hora}"
             )
-        return {"chat_id": telegram, "mensagem": mensagem}
+            return {"chat_id": telegram, "mensagem": mensagem}
 
     return None
+
+
+def _verificar_notif_offline_pendente(cam: dict, agora: datetime) -> dict | None:
+    """Envia alerta de offline se a câmera atingiu _NOTIF_THRESHOLD_SEC sem notificação."""
+    camera_id = cam["id"]
+    telegram  = cam.get("grupo_telegram")
+    if not telegram:
+        return None
+    if _offline_notificado.get(camera_id, True):
+        return None
+    inicio = _offline_desde.get(camera_id)
+    if inicio is None:
+        # Câmera estava offline antes do checker iniciar; usa agora como referência
+        _offline_desde[camera_id]      = agora
+        _offline_notificado[camera_id] = False
+        return None
+    if (agora - inicio).total_seconds() < _NOTIF_THRESHOLD_SEC:
+        return None
+    _offline_notificado[camera_id] = True
+    hora_inicio = inicio.strftime("%d/%m/%Y %H:%M:%S")
+    return {
+        "chat_id": telegram,
+        "mensagem": (
+            f"🔴 CÂMERA OFFLINE\n\n"
+            f"📷 {cam['nome']}\n"
+            f"🏢 {cam['empresa_nome']}\n"
+            f"🕒 Offline desde: {hora_inicio}"
+        ),
+    }
 
 
 def calcular_duracao_offline(session, camera_id: int, agora: datetime) -> int | None:
@@ -217,11 +257,38 @@ def calcular_duracao_offline(session, camera_id: int, agora: datetime) -> int | 
 
 
 # ------------------------------------------------------------------
+# Inicialização do estado offline (sobrevive ao restart do processo)
+# ------------------------------------------------------------------
+
+def _init_offline_desde(app):
+    """Reconstrói _offline_desde/_offline_notificado a partir do banco ao iniciar."""
+    with app.app_context():
+        rows = db.session.execute(text("""
+            SELECT camera_id, MAX(timestamp) AS ts
+            FROM evento_camera
+            WHERE status = 'offline'
+              AND camera_id IN (
+                  SELECT id FROM camera WHERE ativo = TRUE AND ultimo_status = 'offline'
+              )
+            GROUP BY camera_id
+        """)).fetchall()
+        agora_sp = datetime.now(_SP).replace(tzinfo=None)
+        for row in rows:
+            _offline_desde[row[0]] = row[1]
+            elapsed = (agora_sp - row[1]).total_seconds()
+            # Se já ultrapassou o limiar: considera notificado (evita alerta duplicado)
+            _offline_notificado[row[0]] = elapsed >= _NOTIF_THRESHOLD_SEC
+        if rows:
+            log.info(f"Estado offline restaurado para {len(rows)} câmeras.")
+
+
+# ------------------------------------------------------------------
 # Loop principal
 # ------------------------------------------------------------------
 
 def run_checker():
     app = create_app()
+    _init_offline_desde(app)
 
     log.info("CamWatch Checker iniciado.")
     log.info(f"Workers: {Config.CHECKER_WORKERS} | "
