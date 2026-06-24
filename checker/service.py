@@ -220,7 +220,7 @@ def _verificar_notif_offline_pendente(cam: dict, agora: datetime) -> dict | None
     telegram  = cam.get("grupo_telegram")
     if not telegram:
         return None
-    if _offline_notificado.get(camera_id, True):
+    if _offline_notificado.get(camera_id, False):
         return None
     inicio = _offline_desde.get(camera_id)
     if inicio is None:
@@ -272,12 +272,9 @@ def _init_offline_desde(app):
               )
             GROUP BY camera_id
         """)).fetchall()
-        agora_sp = datetime.now(_SP).replace(tzinfo=None)
         for row in rows:
-            _offline_desde[row[0]] = row[1]
-            elapsed = (agora_sp - row[1]).total_seconds()
-            # Se já ultrapassou o limiar: considera notificado (evita alerta duplicado)
-            _offline_notificado[row[0]] = elapsed >= _NOTIF_THRESHOLD_SEC
+            _offline_desde[row[0]]      = row[1]
+            _offline_notificado[row[0]] = False
         if rows:
             log.info(f"Estado offline restaurado para {len(rows)} câmeras.")
 
