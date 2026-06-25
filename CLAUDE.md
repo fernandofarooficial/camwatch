@@ -1,0 +1,81 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## Running the application
+
+**Development (local):**
+```bash
+# Activate venv first
+.venv\Scripts\activate          # Windows
+source .venv/bin/activate       # Linux/Mac
+
+# Web server — accessible at http://localhost:5000 (no /camwatch prefix in dev)
+python wsgi.py
+
+# Checker daemon (separate terminal)
+python checker/service.py
+```
+
+**Production (VPS):**
+```bash
+bash deploy.sh   # git pull + pip install + systemctl restart
+```
+
+The two systemd services are `camwatch-web` (Gunicorn on port 5005) and `camwatch-checker` (checker daemon).
+
+## Environment setup
+
+Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`. Optional: `DB_PORT` (default 3306), `SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `CHECKER_WORKERS` (default 80 threads), `CHECKER_LOOP_SLEEP` (default 10s), `CHECKER_TIMEOUT_SEC` (default 20s).
+
+Database schema is in `_doc/_db/db.sql` — apply it manually to a fresh MySQL database. SQLAlchemy does **not** manage migrations; schema changes must be applied by hand.
+
+## Architecture
+
+CamWatch runs as **two independent processes** that share the same MySQL database:
+
+### Web process (`wsgi.py` → `app/`)
+
+Flask app created via `create_app()` factory. In production, `DispatcherMiddleware` mounts it at `/camwatch`, so all `url_for()` calls, redirects, and HTMX targets must remain relative — never hardcode the path prefix. In development, `_app.run(debug=True)` bypasses the middleware and runs at root.
+
+Two blueprints:
+- `monitor_bp` — mounted at `/` — the three monitoring screens
+- `cadastro_bp` — mounted at `/cadastro` — CRUD for empresas, grupos, cameras
+
+**HTMX pattern**: Full-page routes render complete templates; corresponding `/parcial` or `/detalhe/<id>` routes return only the relevant fragment. The partial endpoints share query logic with their parent full-page routes via private helper functions (`_query_eventos`, `_query_cameras_polaroid`, etc.).
+
+Three monitoring screens:
+- **Monitor** (`/`) — paginated event log with filter bar (empresa / grupo / câmera); auto-refreshes summary cards via HTMX polling (`/resumo/parcial`)
+- **Polaroid** (`/polaroid`) — card grid showing current status of every camera; filters by empresa, grupo, and **status** (all / online / offline); each offline card shows how long the camera has been down (`offline_desde` from a secondary `MAX(timestamp)` query); refreshes via HTMX polling
+- **Números** (`/numeros`) — per-empresa statistics for the last 120 hours; uses `LEAD()` window function to read `duracao_offline_segundos` from the subsequent online event; no filter controls on this screen
+
+### Checker process (`checker/service.py`)
+
+Infinite loop:
+1. Query cameras whose per-camera `intervalo_segundos` has elapsed (`get_cameras_due`)
+2. Run `ffprobe` (must be installed on the system) in parallel via `ThreadPoolExecutor` — no video decoding, just stream probe
+3. Apply a **3-failure debounce** before marking a camera offline (counter in `_falhas` dict, resets on any online result)
+4. On status change: update `camera.ultimo_status`, insert a row into `evento_camera`
+5. When a camera returns online: compute `duracao_offline_segundos` from the last offline event timestamp and write it to the new online event row
+6. After `session.commit()`: send Telegram notifications according to the delay rules below
+
+**Telegram notification delay**: offline alerts are only sent after the camera has been continuously offline for **10 minutes** (`_NOTIF_THRESHOLD_SEC = 600`). The checker tracks this with two in-memory dicts: `_offline_desde` (camera_id → datetime when offline was confirmed) and `_offline_notificado` (camera_id → whether the alert was already sent). Recovery notifications are only sent if the offline alert was previously dispatched. On startup, `_init_offline_desde()` reconstructs this state from the database to avoid duplicate alerts after a process restart.
+
+### Data model
+
+- `empresa` → `grupo_camera` (many) → `camera` (many) → `evento_camera` (many, append-only)
+- `evento_camera` only records **state changes**, not every check. `duracao_offline_segundos` is populated on the *online* event (not the offline one) when the camera recovers.
+- All datetimes are stored as naive `DATETIME` in São Paulo time (`America/Sao_Paulo`). The `_agora()` helper in `models.py` and `_SP` timezone objects throughout enforce this consistently.
+- `camera.ultimo_status` is a denormalized cache of the latest event status — avoid querying `evento_camera` for current status; use `camera.ultimo_status` instead.
+
+### Telegram notifications
+
+Notifications are per `grupo_camera`, not per camera. Set `grupo_camera.telegram` to a Telegram chat ID. The bot token comes from `TELEGRAM_BOT_TOKEN` in `.env`. If either is absent, notifications are silently skipped.
+
+### Filter persistence
+
+The **Monitor** and **Polaroid** screens use a `syncFiltros()` JavaScript function that pushes the active filter values into the URL via `history.replaceState()` whenever the form changes. This ensures filters survive page refreshes and that the HTMX polling target (`hx-get`) always carries the current filter query string. The Números screen has no filter bar.
+
+### Números screen — per-camera detail
+
+`/numeros/detalhe/<empresa_id>` is an HTMX endpoint that returns a per-camera breakdown (offline count, average duration, bucketed by <3 min / <5 min / <10 min) for the selected empresa. It uses the same `LEAD()` CTE as the parent `/numeros` route and renders `partials/numeros_detalhe.html`.
