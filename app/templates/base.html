@@ -36,7 +36,7 @@
          class="nav-item {% if request.endpoint == 'monitor.numeros' %}active{% endif %}">
         <span class="nav-icon">◎</span> Números
       </a>
-      <a href="{{ url_for('cadastro.empresas') }}"
+      <a href="{{ url_for('cadastro.empresas') if session.get('empresa_acesso') == '*' else url_for('cadastro.grupos') }}"
          class="nav-item {% if request.blueprint == 'cadastro' %}active{% endif %}">
         <span class="nav-icon">◈</span> Cadastros
       </a>

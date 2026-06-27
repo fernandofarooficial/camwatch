@@ -65,6 +65,8 @@ Session keys set on login:
 - **Monitor**: eventos, resumo cards, polaroid grid, números all filter by empresa. The empresa dropdown is replaced by a hidden input in filter forms. `/numeros/detalhe/<empresa_id>` returns 403 if the id doesn't match the session.
 - **Cadastro**: the "Empresas" sub-nav link is hidden; empresa CRUD routes return 403. Grupos and Câmeras listings show only records belonging to the restricted empresa. Create/edit forms replace the empresa dropdown with a static text display + hidden input. Edit/delete/toggle operations on grupos and câmeras return 403 if the record belongs to a different empresa.
 
+**Nav link for Cadastros** (`base.html`): the sidebar link points to `cadastro.grupos` for company-restricted sessions and to `cadastro.empresas` for master sessions. This avoids a 403 on the landing page when a restricted user clicks "Cadastros".
+
 **Master sessions**: `_empresa_restrita()` returns `None` and all data is visible with no forced filter; the full Cadastro menu (including Empresas) is shown.
 
 **`empresa.senha`**: stored as `CHAR(6)` (nullable) in the `empresa` table to preserve leading zeros. Set via the empresa edit form in Cadastros. If `NULL`, that empresa cannot be accessed by PIN (only via master password). Migration for existing databases: `ALTER TABLE empresa ADD COLUMN senha CHAR(6) NULL AFTER ativo;`
