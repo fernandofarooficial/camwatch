@@ -424,6 +424,7 @@ def fora_do_ar():
         resumo=resumo,
         empresa_restrita=restrito,
         refresh=refresh,
+        threshold_sec=_NOTIF_THRESHOLD_SEC,
         threshold_min=_NOTIF_THRESHOLD_SEC // 60,
     )
 
@@ -444,6 +445,7 @@ def fora_do_ar_parcial():
         empresa_id=empresa_id,
         grupo_id=grupo_id,
         agora=agora,
+        threshold_sec=_NOTIF_THRESHOLD_SEC,
     )
 
 

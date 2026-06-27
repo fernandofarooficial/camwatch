@@ -1,7 +1,7 @@
 {% if cameras %}
 <div class="list-header">
   <span class="list-count">
-    {{ cameras|length }} câmera{{ 's' if cameras|length != 1 else '' }} fora do ar
+    {{ cameras|length }} câmera{{ 's' if cameras|length != 1 else '' }} fora do ar há mais de {{ threshold_sec }} segundos
   </span>
 </div>
 <div class="tabela-wrapper">

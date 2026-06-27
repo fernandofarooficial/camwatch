@@ -46,7 +46,7 @@ Two blueprints:
 
 Four monitoring screens:
 - **Monitor** (`/`) — paginated event log with filter bar (empresa / grupo / câmera); auto-refreshes summary cards via HTMX polling (`/resumo/parcial`); filter/pagination updates the event table via `/eventos/parcial` (no full reload)
-- **Fora do ar** (`/fora-do-ar`) — table of cameras that have been continuously offline longer than `NOTIF_THRESHOLD_SEC`; filters by empresa and grupo; user-selectable auto-refresh interval (60 / 120 / 300 s) controlled via JS `setInterval` + `htmx.trigger(wrapper, 'refresh')`; partial endpoint `/fora-do-ar/parcial`; rows ordered newest-offline-first
+- **Fora do ar** (`/fora-do-ar`) — table of cameras that have been continuously offline longer than `NOTIF_THRESHOLD_SEC`; the count header reads "N câmeras fora do ar há mais de X segundos" where X is `NOTIF_THRESHOLD_SEC` passed as `threshold_sec` to both the full route and the partial; filters by empresa and grupo; user-selectable auto-refresh interval (60 / 120 / 300 s) controlled via JS `setInterval` + `htmx.trigger(wrapper, 'refresh')`; partial endpoint `/fora-do-ar/parcial`; rows ordered newest-offline-first
 - **Polaroid** (`/polaroid`) — card grid showing current status of every camera; filters by empresa, grupo, and **status** (all / online / offline); each offline card shows how long the camera has been down (`offline_desde` from a secondary `MAX(timestamp)` query); refreshes the camera grid via HTMX polling (`/polaroid/parcial`)
 - **Números** (`/numeros`) — per-empresa statistics for the last 120 hours; uses `LEAD()` window function to read `duracao_offline_segundos` from the subsequent online event; no filter controls on this screen
 
