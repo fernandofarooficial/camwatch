@@ -23,6 +23,9 @@ class Config:
 
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-inseguro-troque-em-producao")
 
+    # Senha master — acesso a todas as empresas; vazio = desabilitada
+    MASTER_PASSWORD = os.getenv("MASTER_PASSWORD", "")
+
     # Telegram — token do bot para notificações de estado das câmeras
     TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 

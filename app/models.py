@@ -45,6 +45,7 @@ class Empresa(db.Model):
     nome      = db.Column(db.String(100), nullable=False)
     cnpj      = db.Column(db.String(18),  unique=True)
     ativo     = db.Column(db.Boolean,     nullable=False, default=True)
+    senha     = db.Column(db.CHAR(6),     nullable=True)
     criado_em = db.Column(db.DateTime,    nullable=False, default=_agora)
 
     # relacionamentos

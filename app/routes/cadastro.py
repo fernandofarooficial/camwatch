@@ -22,12 +22,16 @@ def empresas():
 @cadastro_bp.route("/empresas/nova", methods=["GET", "POST"])
 def empresa_nova():
     if request.method == "POST":
-        nome = request.form.get("nome", "").strip()
-        cnpj = request.form.get("cnpj", "").strip() or None
+        nome  = request.form.get("nome",  "").strip()
+        cnpj  = request.form.get("cnpj",  "").strip() or None
+        senha = request.form.get("senha", "").strip() or None
         if not nome:
             flash("Nome é obrigatório.", "erro")
             return render_template("cadastro/empresa_form.html", empresa=None)
-        db.session.add(Empresa(nome=nome, cnpj=cnpj))
+        if senha and (len(senha) != 6 or not senha.isdigit()):
+            flash("Senha deve ter exatamente 6 dígitos numéricos.", "erro")
+            return render_template("cadastro/empresa_form.html", empresa=None)
+        db.session.add(Empresa(nome=nome, cnpj=cnpj, senha=senha))
         db.session.commit()
         flash("Empresa cadastrada com sucesso.", "ok")
         return redirect(url_for("cadastro.empresas"))
@@ -38,13 +42,18 @@ def empresa_nova():
 def empresa_editar(id):
     empresa = Empresa.query.get_or_404(id)
     if request.method == "POST":
-        nome = request.form.get("nome", "").strip()
+        nome  = request.form.get("nome",  "").strip()
+        senha = request.form.get("senha", "").strip() or None
         if not nome:
             flash("Nome é obrigatório.", "erro")
+            return render_template("cadastro/empresa_form.html", empresa=empresa)
+        if senha and (len(senha) != 6 or not senha.isdigit()):
+            flash("Senha deve ter exatamente 6 dígitos numéricos.", "erro")
             return render_template("cadastro/empresa_form.html", empresa=empresa)
         empresa.nome  = nome
         empresa.cnpj  = request.form.get("cnpj", "").strip() or None
         empresa.ativo = "ativo" in request.form
+        empresa.senha = senha
         db.session.commit()
         flash("Empresa atualizada.", "ok")
         return redirect(url_for("cadastro.empresas"))

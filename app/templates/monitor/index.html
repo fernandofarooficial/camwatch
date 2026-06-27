@@ -25,6 +25,9 @@
         hx-swap="innerHTML"
         hx-push-url="false">
 
+    {% if empresa_restrita %}
+      <input type="hidden" name="empresa_id" value="{{ empresa_restrita }}">
+    {% else %}
     <div class="filtro-grupo">
       <label>Empresa</label>
       <select name="empresa_id" id="sel-empresa">
@@ -36,6 +39,7 @@
         {% endfor %}
       </select>
     </div>
+    {% endif %}
 
     <div class="filtro-grupo">
       <label>Grupo</label>

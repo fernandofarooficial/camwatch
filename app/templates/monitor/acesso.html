@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Acesso — CamWatch</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+</head>
+<body class="body-acesso">
+
+  <div class="acesso-wrap">
+    <div class="acesso-card">
+
+      <div class="acesso-brand">
+        <span class="brand-icon">⬡</span>
+        <span class="brand-name">CamWatch</span>
+      </div>
+
+      <p class="acesso-label">Digite sua senha de acesso</p>
+
+      {% if erro %}
+        <div class="acesso-erro">{{ erro }}</div>
+      {% endif %}
+
+      <form method="POST" class="acesso-form">
+        <input
+          type="password"
+          name="pin"
+          id="pin"
+          placeholder="••••••"
+          maxlength="30"
+          autocomplete="current-password"
+          autofocus
+          class="acesso-input">
+        <button type="submit" class="btn-acesso">Entrar</button>
+      </form>
+
+    </div>
+  </div>
+
+</body>
+</html>

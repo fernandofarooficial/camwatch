@@ -656,3 +656,87 @@ select option { background: var(--bg3); }
 .detalhe-tabela tbody tr { border-bottom: 1px solid var(--border); }
 .detalhe-tabela tbody tr:last-child { border-bottom: none; }
 .detalhe-tabela td { padding: 8px 12px; color: var(--text); vertical-align: middle; }
+
+/* ------ Tela de acesso (login por PIN) -------------------- */
+.body-acesso {
+  align-items: center;
+  justify-content: center;
+}
+.acesso-wrap {
+  width: 100%;
+  max-width: 360px;
+  padding: 24px;
+}
+.acesso-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 36px 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.acesso-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.acesso-label {
+  font-size: 13px;
+  color: var(--text2);
+  margin-top: -8px;
+}
+.acesso-erro {
+  font-size: 12px;
+  color: var(--red);
+  background: var(--red-dim);
+  border-left: 3px solid var(--red);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+}
+.acesso-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.acesso-input {
+  width: 100%;
+  font-size: 22px;
+  font-family: var(--mono);
+  letter-spacing: 0.25em;
+  padding: 10px 14px;
+  text-align: center;
+}
+.btn-acesso {
+  padding: 10px;
+  background: var(--amber);
+  color: #000;
+  border: none;
+  border-radius: var(--radius);
+  font-size: 13px;
+  font-weight: 600;
+  transition: opacity var(--transition);
+}
+.btn-acesso:hover { opacity: 0.85; }
+
+/* ------ Sidebar: empresa logada e link Sair --------------- */
+.sidebar-acesso {
+  padding: 0 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sidebar-empresa-nome {
+  padding: 6px 12px;
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--amber);
+  background: var(--amber-dim);
+  border-radius: var(--radius);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0.9;
+}
+.nav-item-sair { color: var(--text3); font-size: 12px; }
+.nav-item-sair:hover { color: var(--red); background: var(--bg3); }

@@ -25,6 +25,20 @@
              maxlength="18">
     </div>
 
+    <div class="form-row">
+      <label for="senha">
+        Senha de acesso
+        <span class="form-hint">(6 dígitos numéricos)</span>
+      </label>
+      <input type="text" id="senha" name="senha"
+             value="{{ empresa.senha if empresa and empresa.senha else '' }}"
+             placeholder="000000"
+             maxlength="6"
+             pattern="[0-9]{6}"
+             inputmode="numeric">
+      <span class="form-hint-text">Deixe vazio para desabilitar o acesso por senha desta empresa.</span>
+    </div>
+
     {% if empresa %}
     <div class="form-row form-row-inline">
       <label>

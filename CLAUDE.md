@@ -40,16 +40,18 @@ Flask app created via `create_app()` factory. In production, `DispatcherMiddlewa
 
 Two blueprints:
 - `monitor_bp` — mounted at `/` — the three monitoring screens
-- `cadastro_bp` — mounted at `/cadastro` — CRUD for empresas, grupos, cameras
+- `cadastro_bp` — mounted at `/cadastro` — CRUD for empresas, grupos, cameras; includes `/cameras/<id>/toggle` (POST) to activate/deactivate a camera directly from the listing without going through the edit form
 
 **HTMX pattern**: Full-page routes render complete templates; corresponding `/parcial` or `/detalhe/<id>` routes return only the relevant fragment. The partial endpoints share query logic with their parent full-page routes via private helper functions (`_query_eventos`, `_query_cameras_polaroid`, etc.).
 
 Three monitoring screens:
-- **Monitor** (`/`) — paginated event log with filter bar (empresa / grupo / câmera); auto-refreshes summary cards via HTMX polling (`/resumo/parcial`)
-- **Polaroid** (`/polaroid`) — card grid showing current status of every camera; filters by empresa, grupo, and **status** (all / online / offline); each offline card shows how long the camera has been down (`offline_desde` from a secondary `MAX(timestamp)` query); refreshes via HTMX polling
+- **Monitor** (`/`) — paginated event log with filter bar (empresa / grupo / câmera); auto-refreshes summary cards via HTMX polling (`/resumo/parcial`); filter/pagination updates the event table via `/eventos/parcial` (no full reload)
+- **Polaroid** (`/polaroid`) — card grid showing current status of every camera; filters by empresa, grupo, and **status** (all / online / offline); each offline card shows how long the camera has been down (`offline_desde` from a secondary `MAX(timestamp)` query); refreshes the camera grid via HTMX polling (`/polaroid/parcial`)
 - **Números** (`/numeros`) — per-empresa statistics for the last 120 hours; uses `LEAD()` window function to read `duracao_offline_segundos` from the subsequent online event; no filter controls on this screen
 
 ### Checker process (`checker/service.py`)
+
+> **Note:** The checker's log file is hardcoded to `/var/log/camwatch_checker.log` (Linux/production path). On Windows (dev), the `FileHandler` will fail to open; redirect or remove it locally if needed.
 
 Infinite loop:
 1. Query cameras whose per-camera `intervalo_segundos` has elapsed (`get_cameras_due`)
