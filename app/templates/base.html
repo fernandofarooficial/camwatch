@@ -28,6 +28,10 @@
          class="nav-item {% if request.endpoint == 'monitor.index' %}active{% endif %}">
         <span class="nav-icon">◉</span> Monitor
       </a>
+      <a href="{{ url_for('monitor.fora_do_ar') }}"
+         class="nav-item {% if request.endpoint and 'fora_do_ar' in request.endpoint %}active{% endif %}">
+        <span class="nav-icon">◍</span> Fora do ar
+      </a>
       <a href="{{ url_for('monitor.polaroid') }}"
          class="nav-item {% if request.endpoint and 'polaroid' in request.endpoint %}active{% endif %}">
         <span class="nav-icon">◫</span> Polaroid

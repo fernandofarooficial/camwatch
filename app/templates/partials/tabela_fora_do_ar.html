@@ -1,0 +1,51 @@
+{% if cameras %}
+<div class="list-header">
+  <span class="list-count">
+    {{ cameras|length }} câmera{{ 's' if cameras|length != 1 else '' }} fora do ar
+  </span>
+</div>
+<div class="tabela-wrapper">
+  <table class="tabela-eventos">
+    <thead>
+      <tr>
+        <th>Câmera</th>
+        <th>Empresa</th>
+        <th>Grupo</th>
+        <th>Offline desde</th>
+        <th>Tempo offline</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for cam in cameras %}
+        {% set od = offline_desde.get(cam.id) %}
+        {% set seg = ((agora - od).total_seconds()) | int if od else 0 %}
+        <tr>
+          <td>{{ cam.nome }}</td>
+          <td class="td-muted">{{ cam.empresa.nome }}</td>
+          <td class="td-muted">{{ cam.grupo.nome if cam.grupo else '—' }}</td>
+          <td class="td-mono td-muted">
+            {{ od.strftime('%d/%m %H:%M') if od else '—' }}
+          </td>
+          <td class="td-mono">
+            {% if seg >= 3600 %}
+              <span class="badge badge-offline">
+                {{ seg // 3600 }}h {{ (seg % 3600) // 60 }}min
+              </span>
+            {% elif seg >= 60 %}
+              <span class="badge badge-offline">
+                {{ seg // 60 }}min {{ seg % 60 }}s
+              </span>
+            {% else %}
+              <span class="badge badge-offline">{{ seg }}s</span>
+            {% endif %}
+          </td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="tabela-vazia">
+  <span>Nenhuma câmera fora do ar no momento.</span>
+</div>
+{% endif %}

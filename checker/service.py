@@ -29,9 +29,6 @@ _SP = ZoneInfo("America/Sao_Paulo")
 # Debounce: exige N falhas consecutivas antes de marcar câmera como offline.
 _OFFLINE_DEBOUNCE = 3
 
-# Notificação Telegram só após câmera ficar offline por este tempo.
-_NOTIF_THRESHOLD_SEC = 600  # 10 minutos
-
 _falhas:             dict[int, int]      = {}
 _offline_desde:      dict[int, datetime] = {}  # camera_id → quando confirmou offline
 _offline_notificado: dict[int, bool]     = {}  # camera_id → se já enviou o alerta
@@ -43,6 +40,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from app import create_app
 from app.models import db, EventoCamera, StatusEvento
 from config import Config
+
+# Notificação Telegram só após câmera ficar offline por este tempo.
+_NOTIF_THRESHOLD_SEC = Config.NOTIF_THRESHOLD_SEC
 
 # ------------------------------------------------------------------
 # Logging

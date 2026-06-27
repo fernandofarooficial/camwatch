@@ -44,8 +44,9 @@ Two blueprints:
 
 **HTMX pattern**: Full-page routes render complete templates; corresponding `/parcial` or `/detalhe/<id>` routes return only the relevant fragment. The partial endpoints share query logic with their parent full-page routes via private helper functions (`_query_eventos`, `_query_cameras_polaroid`, etc.).
 
-Three monitoring screens:
+Four monitoring screens:
 - **Monitor** (`/`) — paginated event log with filter bar (empresa / grupo / câmera); auto-refreshes summary cards via HTMX polling (`/resumo/parcial`); filter/pagination updates the event table via `/eventos/parcial` (no full reload)
+- **Fora do ar** (`/fora-do-ar`) — table of cameras that have been continuously offline longer than `NOTIF_THRESHOLD_SEC`; filters by empresa and grupo; user-selectable auto-refresh interval (60 / 120 / 300 s) controlled via JS `setInterval` + `htmx.trigger(wrapper, 'refresh')`; partial endpoint `/fora-do-ar/parcial`; rows ordered oldest-offline-first
 - **Polaroid** (`/polaroid`) — card grid showing current status of every camera; filters by empresa, grupo, and **status** (all / online / offline); each offline card shows how long the camera has been down (`offline_desde` from a secondary `MAX(timestamp)` query); refreshes the camera grid via HTMX polling (`/polaroid/parcial`)
 - **Números** (`/numeros`) — per-empresa statistics for the last 120 hours; uses `LEAD()` window function to read `duracao_offline_segundos` from the subsequent online event; no filter controls on this screen
 
@@ -83,7 +84,7 @@ Infinite loop:
 5. When a camera returns online: compute `duracao_offline_segundos` from the last offline event timestamp and write it to the new online event row
 6. After `session.commit()`: send Telegram notifications according to the delay rules below
 
-**Telegram notification delay**: offline alerts are only sent after the camera has been continuously offline for **10 minutes** (`_NOTIF_THRESHOLD_SEC = 600`). The checker tracks this with two in-memory dicts: `_offline_desde` (camera_id → datetime when offline was confirmed) and `_offline_notificado` (camera_id → whether the alert was already sent). Recovery notifications are only sent if the offline alert was previously dispatched. On startup, `_init_offline_desde()` reconstructs this state from the database to avoid duplicate alerts after a process restart.
+**Telegram notification delay**: offline alerts are only sent after the camera has been continuously offline for `NOTIF_THRESHOLD_SEC` (default 600 s / 10 min, configurable via `.env`). The checker reads this value from `Config.NOTIF_THRESHOLD_SEC` and stores it locally as `_NOTIF_THRESHOLD_SEC`. The web process also reads `Config.NOTIF_THRESHOLD_SEC` to drive the "Fora do ar" screen. The checker tracks state with two in-memory dicts: `_offline_desde` (camera_id → datetime when offline was confirmed) and `_offline_notificado` (camera_id → whether the alert was already sent). Recovery notifications are only sent if the offline alert was previously dispatched. On startup, `_init_offline_desde()` reconstructs this state from the database to avoid duplicate alerts after a process restart.
 
 ### Data model
 

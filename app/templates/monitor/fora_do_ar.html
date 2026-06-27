@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}Fora do ar — CamWatch{% endblock %}
+{% block page_title %}Fora do ar{% endblock %}
+
+{% block header_actions %}
+  <span class="last-update" id="last-update">—</span>
+{% endblock %}
+
+{% block content %}
+
+  <!-- Cards de resumo -->
+  <div id="cards-resumo"
+       hx-get="{{ url_for('monitor.resumo_parcial') }}"
+       hx-trigger="load, every 30s"
+       hx-swap="innerHTML">
+    {% include "partials/cards_resumo.html" %}
+  </div>
+
+  <!-- Filtros + seletor de refresh -->
+  <form class="filtros" id="form-filtros">
+
+    {% if empresa_restrita %}
+      <input type="hidden" name="empresa_id" value="{{ empresa_restrita }}">
+    {% else %}
+    <div class="filtro-grupo">
+      <label>Empresa</label>
+      <select name="empresa_id">
+        <option value="">Todas</option>
+        {% for e in empresas %}
+          <option value="{{ e.id }}" {% if empresa_id == e.id %}selected{% endif %}>
+            {{ e.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+    {% endif %}
+
+    <div class="filtro-grupo">
+      <label>Grupo</label>
+      <select name="grupo_id">
+        <option value="">Todos</option>
+        {% for g in grupos %}
+          <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>
+            {{ g.nome }}
+          </option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <div class="filtro-grupo">
+      <label>Atualizar a cada</label>
+      <select id="refresh-interval">
+        <option value="60"  {% if refresh == 60  %}selected{% endif %}>60 segundos</option>
+        <option value="120" {% if refresh == 120 %}selected{% endif %}>120 segundos</option>
+        <option value="300" {% if refresh == 300 %}selected{% endif %}>300 segundos</option>
+      </select>
+    </div>
+
+    <button type="submit" class="btn-filtrar">Filtrar</button>
+  </form>
+
+  <!-- Tabela de câmeras fora do ar -->
+  {% set qs = '?empresa_id=' ~ (empresa_id or '') ~ '&grupo_id=' ~ (grupo_id or '') %}
+  <div id="fora-do-ar-wrapper"
+       hx-get="{{ url_for('monitor.fora_do_ar_parcial') ~ qs }}"
+       hx-trigger="refresh"
+       hx-swap="innerHTML">
+    {% include "partials/tabela_fora_do_ar.html" %}
+  </div>
+
+  <p class="form-hint-text" style="margin-top:12px;">
+    Exibe câmeras ativas offline há mais de {{ threshold_min }} minutos.
+  </p>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function atualizarHora() {
+    const el = document.getElementById('last-update');
+    if (el) el.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+  }
+  document.addEventListener('htmx:afterSwap', function(e) {
+    if (e.detail.target.id === 'fora-do-ar-wrapper') atualizarHora();
+  });
+  atualizarHora();
+
+  // Refresh periódico controlado pelo seletor
+  let _timer = null;
+  const wrapper = document.getElementById('fora-do-ar-wrapper');
+  const selRefresh = document.getElementById('refresh-interval');
+
+  function reiniciarTimer() {
+    if (_timer) clearInterval(_timer);
+    const seg = parseInt(selRefresh.value) * 1000;
+    _timer = setInterval(() => htmx.trigger(wrapper, 'refresh'), seg);
+  }
+
+  selRefresh.addEventListener('change', reiniciarTimer);
+  reiniciarTimer();
+
+  // Filtros: submit atualiza URL e o wrapper HTMX
+  function syncFiltros() {
+    const form = document.getElementById('form-filtros');
+    const params = new URLSearchParams();
+    new FormData(form).forEach((val, key) => { if (val) params.set(key, val); });
+    params.set('refresh', selRefresh.value);
+    const qs = params.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+    const base = "{{ url_for('monitor.fora_do_ar_parcial') }}";
+    wrapper.setAttribute('hx-get', base + (qs ? '?' + qs : ''));
+    htmx.process(wrapper);
+    htmx.trigger(wrapper, 'refresh');
+  }
+
+  document.getElementById('form-filtros').addEventListener('submit', function(e) {
+    e.preventDefault();
+    syncFiltros();
+  });
+  document.getElementById('form-filtros').querySelectorAll('select:not(#refresh-interval)')
+    .forEach(sel => sel.addEventListener('change', syncFiltros));
+</script>
+{% endblock %}

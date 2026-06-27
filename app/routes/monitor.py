@@ -13,6 +13,8 @@ from sqlalchemy.orm import joinedload
 from app.models import db, EventoCamera, Camera, GrupoCamera, Empresa, StatusCamera, StatusEvento
 from config import Config
 
+_NOTIF_THRESHOLD_SEC = Config.NOTIF_THRESHOLD_SEC
+
 _SP = ZoneInfo("America/Sao_Paulo")
 
 monitor_bp = Blueprint("monitor", __name__)
@@ -348,6 +350,101 @@ def numeros():
     """), params).mappings().fetchall()
 
     return render_template("monitor/numeros.html", stats=stats, limite=limite)
+
+
+# ------------------------------------------------------------------
+# Fora do ar — câmeras offline há mais de _NOTIF_THRESHOLD_SEC
+# ------------------------------------------------------------------
+
+def _query_fora_do_ar(empresa_id=None, grupo_id=None):
+    """Retorna (cameras, offline_desde, agora) — só câmeras offline acima do limiar."""
+    agora  = datetime.now(_SP).replace(tzinfo=None)
+    limite = agora - timedelta(seconds=_NOTIF_THRESHOLD_SEC)
+
+    sub = (
+        db.session.query(
+            EventoCamera.camera_id,
+            func.max(EventoCamera.timestamp).label("ts"),
+        )
+        .filter(EventoCamera.status == StatusEvento.offline)
+        .group_by(EventoCamera.camera_id)
+        .subquery()
+    )
+
+    q = (
+        db.session.query(Camera, sub.c.ts)
+        .filter(Camera.ativo.is_(True))
+        .filter(Camera.ultimo_status == StatusCamera.offline)
+        .join(sub, Camera.id == sub.c.camera_id)
+        .filter(sub.c.ts <= limite)
+        .join(Camera.empresa)
+        .options(
+            joinedload(Camera.empresa),
+            joinedload(Camera.grupo),
+        )
+    )
+
+    if empresa_id:
+        q = q.filter(Camera.empresa_id == empresa_id)
+    if grupo_id:
+        q = q.filter(Camera.grupo_id == grupo_id)
+
+    rows = q.order_by(sub.c.ts.asc()).all()
+    cameras      = [r[0] for r in rows]
+    offline_desde = {r[0].id: r[1] for r in rows}
+
+    return cameras, offline_desde, agora
+
+
+@monitor_bp.route("/fora-do-ar")
+def fora_do_ar():
+    """Tela Fora do ar — câmeras offline acima do limiar de notificação."""
+    restrito   = _empresa_restrita()
+    empresa_id = restrito if restrito is not None else request.args.get("empresa_id", type=int)
+    grupo_id   = request.args.get("grupo_id", type=int)
+    refresh    = request.args.get("refresh", 60, type=int)
+
+    empresas = Empresa.query.filter_by(ativo=True).order_by(Empresa.nome).all()
+    grupos   = GrupoCamera.query.order_by(GrupoCamera.nome).all()
+    if restrito:
+        grupos = [g for g in grupos if g.empresa_id == restrito]
+
+    cameras, offline_desde, agora = _query_fora_do_ar(empresa_id, grupo_id)
+    resumo = _resumo_sql(restrito)
+
+    return render_template(
+        "monitor/fora_do_ar.html",
+        empresas=empresas,
+        grupos=grupos,
+        cameras=cameras,
+        offline_desde=offline_desde,
+        empresa_id=empresa_id,
+        grupo_id=grupo_id,
+        agora=agora,
+        resumo=resumo,
+        empresa_restrita=restrito,
+        refresh=refresh,
+        threshold_min=_NOTIF_THRESHOLD_SEC // 60,
+    )
+
+
+@monitor_bp.route("/fora-do-ar/parcial")
+def fora_do_ar_parcial():
+    """Endpoint HTMX — atualiza a tabela de câmeras fora do ar."""
+    restrito   = _empresa_restrita()
+    empresa_id = restrito if restrito is not None else request.args.get("empresa_id", type=int)
+    grupo_id   = request.args.get("grupo_id", type=int)
+
+    cameras, offline_desde, agora = _query_fora_do_ar(empresa_id, grupo_id)
+
+    return render_template(
+        "partials/tabela_fora_do_ar.html",
+        cameras=cameras,
+        offline_desde=offline_desde,
+        empresa_id=empresa_id,
+        grupo_id=grupo_id,
+        agora=agora,
+    )
 
 
 @monitor_bp.route("/numeros/detalhe/<int:empresa_id>")

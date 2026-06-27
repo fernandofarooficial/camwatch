@@ -36,3 +36,6 @@ class Config:
     CHECKER_WORKERS     = int(os.getenv("CHECKER_WORKERS",     "80"))   # threads simultâneas
     CHECKER_LOOP_SLEEP  = int(os.getenv("CHECKER_LOOP_SLEEP",  "10"))   # segundos entre varreduras
     CHECKER_TIMEOUT_SEC = int(os.getenv("CHECKER_TIMEOUT_SEC", "20"))   # timeout por câmera
+
+    # Tempo mínimo de offline antes de enviar alerta Telegram e exibir na tela "Fora do ar"
+    NOTIF_THRESHOLD_SEC = int(os.getenv("NOTIF_THRESHOLD_SEC", "600"))  # padrão 10 minutos
