@@ -389,7 +389,7 @@ def _query_fora_do_ar(empresa_id=None, grupo_id=None):
     if grupo_id:
         q = q.filter(Camera.grupo_id == grupo_id)
 
-    rows = q.order_by(sub.c.ts.asc()).all()
+    rows = q.order_by(sub.c.ts.desc()).all()
     cameras      = [r[0] for r in rows]
     offline_desde = {r[0].id: r[1] for r in rows}
 
