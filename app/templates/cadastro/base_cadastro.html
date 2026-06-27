@@ -4,10 +4,12 @@
 
 {% block header_actions %}
   <nav class="sub-nav">
+    {% if session.get('empresa_acesso') == '*' %}
     <a href="{{ url_for('cadastro.empresas') }}"
        class="sub-nav-item {% if request.endpoint == 'cadastro.empresas' or request.endpoint == 'cadastro.empresa_nova' or request.endpoint == 'cadastro.empresa_editar' %}active{% endif %}">
       Empresas
     </a>
+    {% endif %}
     <a href="{{ url_for('cadastro.grupos') }}"
        class="sub-nav-item {% if 'grupo' in request.endpoint %}active{% endif %}">
       Grupos

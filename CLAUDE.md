@@ -26,7 +26,7 @@ The two systemd services are `camwatch-web` (Gunicorn on port 5005) and `camwatc
 
 ## Environment setup
 
-Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`. Optional: `DB_PORT` (default 3306), `SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `CHECKER_WORKERS` (default 80 threads), `CHECKER_LOOP_SLEEP` (default 10s), `CHECKER_TIMEOUT_SEC` (default 20s).
+Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`. Optional: `DB_PORT` (default 3306), `SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `CHECKER_WORKERS` (default 80 threads), `CHECKER_LOOP_SLEEP` (default 10s), `CHECKER_TIMEOUT_SEC` (default 20s), `MASTER_PASSWORD` (grants access to all companies in the monitoring screens — if empty, master access is disabled).
 
 Database schema is in `_doc/_db/db.sql` — apply it manually to a fresh MySQL database. SQLAlchemy does **not** manage migrations; schema changes must be applied by hand.
 
@@ -39,7 +39,7 @@ CamWatch runs as **two independent processes** that share the same MySQL databas
 Flask app created via `create_app()` factory. In production, `DispatcherMiddleware` mounts it at `/camwatch`, so all `url_for()` calls, redirects, and HTMX targets must remain relative — never hardcode the path prefix. In development, `_app.run(debug=True)` bypasses the middleware and runs at root.
 
 Two blueprints:
-- `monitor_bp` — mounted at `/` — the three monitoring screens
+- `monitor_bp` — mounted at `/` — the three monitoring screens plus access control routes (`/acesso`, `/sair`)
 - `cadastro_bp` — mounted at `/cadastro` — CRUD for empresas, grupos, cameras; includes `/cameras/<id>/toggle` (POST) to activate/deactivate a camera directly from the listing without going through the edit form
 
 **HTMX pattern**: Full-page routes render complete templates; corresponding `/parcial` or `/detalhe/<id>` routes return only the relevant fragment. The partial endpoints share query logic with their parent full-page routes via private helper functions (`_query_eventos`, `_query_cameras_polaroid`, etc.).
@@ -48,6 +48,26 @@ Three monitoring screens:
 - **Monitor** (`/`) — paginated event log with filter bar (empresa / grupo / câmera); auto-refreshes summary cards via HTMX polling (`/resumo/parcial`); filter/pagination updates the event table via `/eventos/parcial` (no full reload)
 - **Polaroid** (`/polaroid`) — card grid showing current status of every camera; filters by empresa, grupo, and **status** (all / online / offline); each offline card shows how long the camera has been down (`offline_desde` from a secondary `MAX(timestamp)` query); refreshes the camera grid via HTMX polling (`/polaroid/parcial`)
 - **Números** (`/numeros`) — per-empresa statistics for the last 120 hours; uses `LEAD()` window function to read `duracao_offline_segundos` from the subsequent online event; no filter controls on this screen
+
+### Access control (session-based PIN)
+
+Both `monitor_bp` and `cadastro_bp` have a `before_request` guard that redirects unauthenticated requests to `/acesso`. Each blueprint defines its own `_empresa_restrita()` helper with identical logic.
+
+- `/acesso` (GET/POST) — PIN entry page (no sidebar, standalone layout). Accepts either a company 6-digit PIN or the `MASTER_PASSWORD` from `.env`.
+- `/sair` (GET) — clears the session and redirects to `/acesso`.
+
+Session keys set on login:
+- `session["empresa_acesso"]` — `"*"` for master access, or an `int` (empresa_id) for company-restricted access.
+- `session["empresa_nome"]` — display name shown in the sidebar (`"Acesso total"` or the empresa name).
+
+**Company-restricted sessions**: when `session["empresa_acesso"]` is an int, `_empresa_restrita()` returns that id and all queries automatically filter to that empresa. This applies to both monitoring and cadastro:
+
+- **Monitor**: eventos, resumo cards, polaroid grid, números all filter by empresa. The empresa dropdown is replaced by a hidden input in filter forms. `/numeros/detalhe/<empresa_id>` returns 403 if the id doesn't match the session.
+- **Cadastro**: the "Empresas" sub-nav link is hidden; empresa CRUD routes return 403. Grupos and Câmeras listings show only records belonging to the restricted empresa. Create/edit forms replace the empresa dropdown with a static text display + hidden input. Edit/delete/toggle operations on grupos and câmeras return 403 if the record belongs to a different empresa.
+
+**Master sessions**: `_empresa_restrita()` returns `None` and all data is visible with no forced filter; the full Cadastro menu (including Empresas) is shown.
+
+**`empresa.senha`**: stored as `CHAR(6)` (nullable) in the `empresa` table to preserve leading zeros. Set via the empresa edit form in Cadastros. If `NULL`, that empresa cannot be accessed by PIN (only via master password). Migration for existing databases: `ALTER TABLE empresa ADD COLUMN senha CHAR(6) NULL AFTER ativo;`
 
 ### Checker process (`checker/service.py`)
 
@@ -66,6 +86,7 @@ Infinite loop:
 ### Data model
 
 - `empresa` → `grupo_camera` (many) → `camera` (many) → `evento_camera` (many, append-only)
+- `empresa.senha` (`CHAR(6) NULL`) — 6-digit numeric PIN for session-based access control; `NULL` means no PIN configured
 - `evento_camera` only records **state changes**, not every check. `duracao_offline_segundos` is populated on the *online* event (not the offline one) when the camera recovers.
 - All datetimes are stored as naive `DATETIME` in São Paulo time (`America/Sao_Paulo`). The `_agora()` helper in `models.py` and `_SP` timezone objects throughout enforce this consistently.
 - `camera.ultimo_status` is a denormalized cache of the latest event status — avoid querying `evento_camera` for current status; use `camera.ultimo_status` instead.

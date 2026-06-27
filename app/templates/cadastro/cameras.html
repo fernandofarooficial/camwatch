@@ -4,6 +4,7 @@
 
 <!-- Filtro rápido -->
 <form class="filtros" method="GET" action="{{ url_for('cadastro.cameras') }}">
+  {% if not empresa_restrita %}
   <div class="filtro-grupo">
     <label>Empresa</label>
     <select name="empresa_id" onchange="this.form.submit()">
@@ -13,6 +14,7 @@
       {% endfor %}
     </select>
   </div>
+  {% endif %}
   <div class="filtro-grupo">
     <label>Grupo</label>
     <select name="grupo_id" onchange="this.form.submit()">

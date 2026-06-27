@@ -9,6 +9,13 @@
 
   <form method="POST">
 
+    {% if empresa_restrita %}
+    <div class="form-row">
+      <label>Empresa</label>
+      <span class="form-value-static">{{ empresas[0].nome }}</span>
+      <input type="hidden" name="empresa_id" value="{{ empresas[0].id }}">
+    </div>
+    {% else %}
     <div class="form-row">
       <label for="empresa_id">Empresa <span class="obrigatorio">*</span></label>
       <select id="empresa_id" name="empresa_id" required>
@@ -23,6 +30,7 @@
         {% endfor %}
       </select>
     </div>
+    {% endif %}
 
     <div class="form-row">
       <label for="nome">Nome <span class="obrigatorio">*</span></label>

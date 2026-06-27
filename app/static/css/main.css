@@ -495,6 +495,12 @@ select option { background: var(--bg3); }
 }
 .obrigatorio { color: var(--red); }
 .form-hint   { font-size: 11px; color: var(--text3); font-weight: 400; }
+.form-value-static {
+  font-size: 13px;
+  color: var(--text);
+  padding: 6px 0;
+  display: block;
+}
 .form-hint-text {
   font-size: 11px;
   color: var(--text3);
