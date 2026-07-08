@@ -111,13 +111,22 @@
 
   // Nível Grupo (dentro do detalhe de uma empresa) — não entra no hash da URL,
   // pois seu conteúdo só existe no DOM depois que a empresa é expandida.
+  // Carrega via htmx.ajax() no primeiro clique em vez de hx-trigger="revealed":
+  // a linha do grupo é injetada dinamicamente (swap do nível empresa) e ainda
+  // fica com display:none até o clique, então o IntersectionObserver do
+  // "revealed" não é confiável para esse conteúdo aninhado.
   function toggleDetalheGrupo(empresaId, grupoId) {
     const key  = empresaId + '-' + grupoId;
     const row  = document.getElementById('detalhe-grupo-' + key);
     const icon = document.getElementById('icon-grupo-' + key);
+    const cell = document.getElementById('cel-grupo-' + key);
     if (row.style.display === 'none') {
       row.style.display = '';
       icon.textContent  = '▼';
+      if (cell && !cell.dataset.loaded) {
+        cell.dataset.loaded = '1';
+        htmx.ajax('GET', cell.dataset.url, { target: '#' + cell.id, swap: 'innerHTML' });
+      }
     } else {
       row.style.display = 'none';
       icon.textContent  = '▶';

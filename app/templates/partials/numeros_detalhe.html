@@ -59,9 +59,8 @@
       </tr>
       <tr id="detalhe-grupo-{{ empresa_id }}-{{ gid }}" class="numeros-detalhe-row" style="display:none">
         <td colspan="10"
-            hx-get="{{ url_for('monitor.numeros_detalhe_grupo', empresa_id=empresa_id, grupo_id=gid) }}"
-            hx-trigger="revealed"
-            hx-swap="innerHTML"
+            id="cel-grupo-{{ empresa_id }}-{{ gid }}"
+            data-url="{{ url_for('monitor.numeros_detalhe_grupo', empresa_id=empresa_id, grupo_id=gid) }}"
             class="detalhe-cell">
         </td>
       </tr>
