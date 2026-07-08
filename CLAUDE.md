@@ -39,7 +39,7 @@ CamWatch runs as **two independent processes** that share the same MySQL databas
 Flask app created via `create_app()` factory. In production, `DispatcherMiddleware` mounts it at `/camwatch`, so all `url_for()` calls, redirects, and HTMX targets must remain relative — never hardcode the path prefix. In development, `_app.run(debug=True)` bypasses the middleware and runs at root.
 
 Two blueprints:
-- `monitor_bp` — mounted at `/` — the three monitoring screens plus access control routes (`/acesso`, `/sair`)
+- `monitor_bp` — mounted at `/` — the four monitoring screens plus access control routes (`/acesso`, `/sair`)
 - `cadastro_bp` — mounted at `/cadastro` — CRUD for empresas, grupos, cameras; includes `/cameras/<id>/toggle` (POST) to activate/deactivate a camera directly from the listing without going through the edit form
 
 **HTMX pattern**: Full-page routes render complete templates; corresponding `/parcial` or `/detalhe/<id>` routes return only the relevant fragment. The partial endpoints share query logic with their parent full-page routes via private helper functions (`_query_eventos`, `_query_cameras_polaroid`, etc.).
@@ -63,7 +63,7 @@ Session keys set on login:
 
 **Company-restricted sessions**: when `session["empresa_acesso"]` is an int, `_empresa_restrita()` returns that id and all queries automatically filter to that empresa. This applies to both monitoring and cadastro:
 
-- **Monitor**: eventos, resumo cards, polaroid grid, números all filter by empresa. The empresa dropdown is replaced by a hidden input in filter forms. `/numeros/detalhe/<empresa_id>` returns 403 if the id doesn't match the session.
+- **Monitor**: eventos, resumo cards, fora do ar table, polaroid grid, números all filter by empresa. The empresa dropdown is replaced by a hidden input in filter forms. `/numeros/detalhe/<empresa_id>` returns 403 if the id doesn't match the session.
 - **Cadastro**: the "Empresas" sub-nav link is hidden; empresa CRUD routes return 403. Grupos and Câmeras listings show only records belonging to the restricted empresa. Create/edit forms replace the empresa dropdown with a static text display + hidden input. Edit/delete/toggle operations on grupos and câmeras return 403 if the record belongs to a different empresa.
 
 **Nav link for Cadastros** (`base.html`): the sidebar link points to `cadastro.grupos` for company-restricted sessions and to `cadastro.empresas` for master sessions. This avoids a 403 on the landing page when a restricted user clicks "Cadastros".
@@ -100,8 +100,8 @@ Notifications are per `grupo_camera`, not per camera. Set `grupo_camera.telegram
 
 ### Filter persistence
 
-The **Monitor** and **Polaroid** screens use a `syncFiltros()` JavaScript function that pushes the active filter values into the URL via `history.replaceState()` whenever the form changes. This ensures filters survive page refreshes and that the HTMX polling target (`hx-get`) always carries the current filter query string. The Números screen has no filter bar.
+The **Monitor**, **Fora do ar**, and **Polaroid** screens use a `syncFiltros()` JavaScript function that pushes the active filter values into the URL via `history.replaceState()` whenever the form changes. This ensures filters survive page refreshes and that the HTMX polling target (`hx-get`) always carries the current filter query string. The Números screen has no filter bar.
 
 ### Números screen — per-camera detail
 
-`/numeros/detalhe/<empresa_id>` is an HTMX endpoint that returns a per-camera breakdown (offline count, average duration, bucketed by <3 min / <5 min / <10 min) for the selected empresa. It uses the same `LEAD()` CTE as the parent `/numeros` route and renders `partials/numeros_detalhe.html`.
+`/numeros/detalhe/<empresa_id>` is an HTMX endpoint that returns a per-camera breakdown (offline count, average duration, bucketed by <3 min / 3-10 min / +10 min, mutually exclusive) for the selected empresa. It uses the same `LEAD()` CTE as the parent `/numeros` route and renders `partials/numeros_detalhe.html`.

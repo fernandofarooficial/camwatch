@@ -19,8 +19,8 @@
         <th class="th-num">Eventos offline</th>
         <th class="th-num">Duração média</th>
         <th class="th-num">< 3 min</th>
-        <th class="th-num">< 5 min</th>
         <th class="th-num">< 10 min</th>
+        <th class="th-num">+ 10 min</th>
       </tr>
     </thead>
     <tbody>
@@ -42,8 +42,8 @@
         </td>
         <td class="td-mono td-num">{{ fmt_dur(c.tempo_medio_seg) }}</td>
         <td class="td-mono td-num">{{ c.menos_3min or 0 }}</td>
-        <td class="td-mono td-num">{{ c.menos_5min or 0 }}</td>
         <td class="td-mono td-num">{{ c.menos_10min or 0 }}</td>
+        <td class="td-mono td-num">{{ c.mais_10min or 0 }}</td>
       </tr>
       {% endfor %}
     </tbody>
