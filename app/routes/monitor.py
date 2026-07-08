@@ -338,9 +338,9 @@ def numeros():
             COUNT(ce.id)                  AS total_vezes_offline,
             AVG(ce.duracao_seg)           AS tempo_medio_offline_seg,
 
-            SUM(ce.duracao_seg < 180) AS offline_menos_3min,
-            SUM(ce.duracao_seg < 300) AS offline_menos_5min,
-            SUM(ce.duracao_seg < 600) AS offline_menos_10min
+            SUM(ce.duracao_seg < 180)                                  AS offline_menos_3min,
+            SUM(ce.duracao_seg >= 180 AND ce.duracao_seg < 600)        AS offline_menos_10min,
+            SUM(ce.duracao_seg >= 600)                                 AS offline_mais_10min
 
         FROM empresa e
         LEFT JOIN cam_events ce ON ce.empresa_id = e.id AND ce.status = 'offline'
@@ -479,9 +479,9 @@ def numeros_detalhe(empresa_id):
             c.ultimo_status AS status_atual,
             COUNT(ce.id)              AS total_vezes_offline,
             AVG(ce.duracao_seg)       AS tempo_medio_seg,
-            SUM(ce.duracao_seg < 180) AS menos_3min,
-            SUM(ce.duracao_seg < 300) AS menos_5min,
-            SUM(ce.duracao_seg < 600) AS menos_10min
+            SUM(ce.duracao_seg < 180)                           AS menos_3min,
+            SUM(ce.duracao_seg >= 180 AND ce.duracao_seg < 600) AS menos_10min,
+            SUM(ce.duracao_seg >= 600)                          AS mais_10min
         FROM camera c
         LEFT JOIN grupo_camera g  ON g.id = c.grupo_id
         LEFT JOIN cam_events   ce ON ce.camera_id = c.id AND ce.status = 'offline'
