@@ -102,6 +102,11 @@ Notifications are per `grupo_camera`, not per camera. Set `grupo_camera.telegram
 
 The **Monitor**, **Fora do ar**, and **Polaroid** screens use a `syncFiltros()` JavaScript function that pushes the active filter values into the URL via `history.replaceState()` whenever the form changes. This ensures filters survive page refreshes and that the HTMX polling target (`hx-get`) always carries the current filter query string. The Números screen has no filter bar.
 
-### Números screen — per-camera detail
+### Números screen — drill-down (empresa → grupo → câmera)
 
-`/numeros/detalhe/<empresa_id>` is an HTMX endpoint that returns a per-camera breakdown (offline count, average duration, bucketed by <3 min / 3-10 min / +10 min, mutually exclusive) for the selected empresa. It uses the same `LEAD()` CTE as the parent `/numeros` route and renders `partials/numeros_detalhe.html`.
+Each empresa row on `/numeros` expands into a three-level drill-down, all using the same metrics (offline count, average duration, bucketed by <3 min / 3-10 min / +10 min, mutually exclusive):
+
+- `/numeros/detalhe/<empresa_id>` — HTMX endpoint returning a **per-grupo** consolidated breakdown for the selected empresa (`partials/numeros_detalhe.html`). Cameras with no `grupo_id` are consolidated into a synthetic "Sem grupo" row.
+- `/numeros/detalhe/<empresa_id>/grupo/<grupo_id>` — HTMX endpoint returning the **per-camera** breakdown for a single grupo (`partials/numeros_grupo_cameras.html`). `grupo_id=0` is the sentinel for the "Sem grupo" bucket (translated to `grupo_id IS NULL` server-side via MySQL's `<=>` null-safe equality operator).
+
+Both routes reuse the same `LEAD()` CTE pattern as the parent `/numeros` route and enforce the same company-restricted 403 check as `/numeros/detalhe/<empresa_id>` always did. Expand/collapse at the grupo level is handled by a separate `toggleDetalheGrupo()` JS function (not persisted in the URL hash, unlike the empresa-level `toggleDetalhe()`/`syncExpandURL()`, since the nested rows don't exist in the DOM until their parent empresa row has been expanded).

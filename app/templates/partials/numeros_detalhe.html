@@ -10,12 +10,14 @@
 {% endmacro %}
 
 <div class="detalhe-cameras">
-  <table class="tabela-eventos detalhe-tabela">
+  <table class="tabela-eventos detalhe-tabela numeros-tabela">
     <thead>
       <tr>
-        <th>Câmera</th>
+        <th></th>
         <th>Grupo</th>
-        <th>Status atual</th>
+        <th class="th-num">Total câmeras</th>
+        <th class="th-num">Offline agora</th>
+        <th class="th-num">Ficaram offline</th>
         <th class="th-num">Eventos offline</th>
         <th class="th-num">Duração média</th>
         <th class="th-num">< 3 min</th>
@@ -24,26 +26,44 @@
       </tr>
     </thead>
     <tbody>
-      {% for c in cameras %}
-      <tr>
-        <td>{{ c.camera_nome }}</td>
-        <td class="td-muted">{{ c.grupo_nome or '—' }}</td>
-        <td>
-          {% if c.status_atual == 'offline' %}
-            <span class="badge badge-offline">● offline</span>
-          {% elif c.status_atual == 'online' %}
-            <span class="badge badge-online">● online</span>
-          {% else %}
-            <span class="badge badge-desconhecido">? desc.</span>
+      {% for g in grupos %}
+      {% set gid = g.grupo_id or 0 %}
+      <tr class="numeros-row" onclick="toggleDetalheGrupo({{ empresa_id }}, {{ gid }})">
+        <td class="td-expand">
+          <span class="expand-icon" id="icon-grupo-{{ empresa_id }}-{{ gid }}">▶</span>
+        </td>
+        <td class="td-empresa-nome">{{ g.grupo_nome }}</td>
+
+        <td class="td-mono td-num">{{ g.total_cameras }}</td>
+
+        <td class="td-mono td-num {% if g.cameras_offline_agora > 0 %}td-num-offline{% endif %}">
+          {{ g.cameras_offline_agora }}
+        </td>
+
+        <td class="td-mono td-num {% if g.cameras_com_offline > 0 %}td-num-warn{% endif %}">
+          {{ g.cameras_com_offline }}
+          {% if g.total_cameras and g.total_cameras > 0 %}
+            <span class="num-pct">({{ ((g.cameras_com_offline / g.total_cameras) * 100) | int }}%)</span>
           {% endif %}
         </td>
-        <td class="td-mono td-num {% if c.total_vezes_offline > 0 %}td-num-warn{% endif %}">
-          {{ c.total_vezes_offline }}
+
+        <td class="td-mono td-num {% if g.total_vezes_offline > 0 %}td-num-warn{% endif %}">
+          {{ g.total_vezes_offline }}
         </td>
-        <td class="td-mono td-num">{{ fmt_dur(c.tempo_medio_seg) }}</td>
-        <td class="td-mono td-num">{{ c.menos_3min or 0 }}</td>
-        <td class="td-mono td-num">{{ c.menos_10min or 0 }}</td>
-        <td class="td-mono td-num">{{ c.mais_10min or 0 }}</td>
+
+        <td class="td-mono td-num">{{ fmt_dur(g.tempo_medio_offline_seg) }}</td>
+
+        <td class="td-mono td-num">{{ g.offline_menos_3min or 0 }}</td>
+        <td class="td-mono td-num">{{ g.offline_menos_10min or 0 }}</td>
+        <td class="td-mono td-num">{{ g.offline_mais_10min or 0 }}</td>
+      </tr>
+      <tr id="detalhe-grupo-{{ empresa_id }}-{{ gid }}" class="numeros-detalhe-row" style="display:none">
+        <td colspan="10"
+            hx-get="{{ url_for('monitor.numeros_detalhe_grupo', empresa_id=empresa_id, grupo_id=gid) }}"
+            hx-trigger="revealed"
+            hx-swap="innerHTML"
+            class="detalhe-cell">
+        </td>
       </tr>
       {% endfor %}
     </tbody>

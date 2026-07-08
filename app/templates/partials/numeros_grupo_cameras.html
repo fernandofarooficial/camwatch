@@ -1,0 +1,49 @@
+{% macro fmt_dur(seg) %}
+{%- if seg is none or seg == 0 -%}—
+{%- else -%}
+  {%- set s = seg | int -%}
+  {%- if s >= 3600 -%}{{ s // 3600 }}h {{ (s % 3600) // 60 }}min
+  {%- elif s >= 60 -%}{{ s // 60 }}min {{ s % 60 }}s
+  {%- else -%}{{ s }}s
+  {%- endif -%}
+{%- endif %}
+{% endmacro %}
+
+<div class="detalhe-cameras">
+  <table class="tabela-eventos detalhe-tabela">
+    <thead>
+      <tr>
+        <th>Câmera</th>
+        <th>Status atual</th>
+        <th class="th-num">Eventos offline</th>
+        <th class="th-num">Duração média</th>
+        <th class="th-num">< 3 min</th>
+        <th class="th-num">< 10 min</th>
+        <th class="th-num">+ 10 min</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in cameras %}
+      <tr>
+        <td>{{ c.camera_nome }}</td>
+        <td>
+          {% if c.status_atual == 'offline' %}
+            <span class="badge badge-offline">● offline</span>
+          {% elif c.status_atual == 'online' %}
+            <span class="badge badge-online">● online</span>
+          {% else %}
+            <span class="badge badge-desconhecido">? desc.</span>
+          {% endif %}
+        </td>
+        <td class="td-mono td-num {% if c.total_vezes_offline > 0 %}td-num-warn{% endif %}">
+          {{ c.total_vezes_offline }}
+        </td>
+        <td class="td-mono td-num">{{ fmt_dur(c.tempo_medio_seg) }}</td>
+        <td class="td-mono td-num">{{ c.menos_3min or 0 }}</td>
+        <td class="td-mono td-num">{{ c.menos_10min or 0 }}</td>
+        <td class="td-mono td-num">{{ c.mais_10min or 0 }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

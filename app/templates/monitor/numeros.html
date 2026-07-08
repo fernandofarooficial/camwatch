@@ -90,7 +90,7 @@
 <script>
   function syncExpandURL() {
     const abertos = [];
-    document.querySelectorAll('.numeros-detalhe-row').forEach(row => {
+    document.querySelectorAll('.numeros-detalhe-row:not([id^="detalhe-grupo-"])').forEach(row => {
       if (row.style.display !== 'none') abertos.push(row.id.replace('detalhe-', ''));
     });
     history.replaceState(null, '', location.pathname + (abertos.length ? '#' + abertos.join(',') : ''));
@@ -107,6 +107,21 @@
       icon.textContent  = '▶';
     }
     syncExpandURL();
+  }
+
+  // Nível Grupo (dentro do detalhe de uma empresa) — não entra no hash da URL,
+  // pois seu conteúdo só existe no DOM depois que a empresa é expandida.
+  function toggleDetalheGrupo(empresaId, grupoId) {
+    const key  = empresaId + '-' + grupoId;
+    const row  = document.getElementById('detalhe-grupo-' + key);
+    const icon = document.getElementById('icon-grupo-' + key);
+    if (row.style.display === 'none') {
+      row.style.display = '';
+      icon.textContent  = '▼';
+    } else {
+      row.style.display = 'none';
+      icon.textContent  = '▶';
+    }
   }
 
   // Restaura linhas expandidas a partir do hash da URL

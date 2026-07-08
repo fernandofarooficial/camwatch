@@ -451,12 +451,76 @@ def fora_do_ar_parcial():
 
 @monitor_bp.route("/numeros/detalhe/<int:empresa_id>")
 def numeros_detalhe(empresa_id):
-    """Endpoint HTMX — breakdown por câmera para auditar os números."""
+    """Endpoint HTMX — consolidado por grupo dentro da empresa (nível intermediário)."""
     restrito = _empresa_restrita()
     if restrito is not None and restrito != empresa_id:
         return "", 403
 
     limite = datetime.now(_SP).replace(tzinfo=None) - timedelta(hours=120)
+
+    grupos = db.session.execute(text("""
+        WITH cam_events AS (
+            SELECT
+                ev.id,
+                ev.camera_id,
+                c.grupo_id,
+                ev.status,
+                LEAD(ev.duracao_offline_segundos)
+                    OVER (PARTITION BY ev.camera_id ORDER BY ev.timestamp)
+                    AS duracao_seg
+            FROM evento_camera ev
+            JOIN camera c ON c.id = ev.camera_id
+            WHERE ev.timestamp >= :limite
+              AND c.empresa_id  = :empresa_id
+        ),
+        grupos AS (
+            SELECT DISTINCT c.grupo_id AS grupo_id, COALESCE(g.nome, 'Sem grupo') AS grupo_nome
+            FROM camera c
+            LEFT JOIN grupo_camera g ON g.id = c.grupo_id
+            WHERE c.empresa_id = :empresa_id AND c.ativo = TRUE
+        )
+        SELECT
+            grupos.grupo_id,
+            grupos.grupo_nome,
+
+            (SELECT COUNT(*) FROM camera c
+             WHERE c.empresa_id = :empresa_id AND c.ativo = TRUE
+               AND c.grupo_id <=> grupos.grupo_id)
+                AS total_cameras,
+
+            (SELECT COUNT(*) FROM camera c
+             WHERE c.empresa_id = :empresa_id AND c.ativo = TRUE
+               AND c.grupo_id <=> grupos.grupo_id
+               AND c.ultimo_status = 'offline')
+                AS cameras_offline_agora,
+
+            COUNT(DISTINCT ce.camera_id) AS cameras_com_offline,
+            COUNT(ce.id)                 AS total_vezes_offline,
+            AVG(ce.duracao_seg)          AS tempo_medio_offline_seg,
+
+            SUM(ce.duracao_seg < 180)                           AS offline_menos_3min,
+            SUM(ce.duracao_seg >= 180 AND ce.duracao_seg < 600) AS offline_menos_10min,
+            SUM(ce.duracao_seg >= 600)                          AS offline_mais_10min
+
+        FROM grupos
+        LEFT JOIN cam_events ce
+            ON ce.grupo_id <=> grupos.grupo_id AND ce.status = 'offline'
+        GROUP BY grupos.grupo_id, grupos.grupo_nome
+        ORDER BY grupos.grupo_id IS NULL, grupos.grupo_nome
+    """), {"limite": limite, "empresa_id": empresa_id}).mappings().fetchall()
+
+    return render_template("partials/numeros_detalhe.html", grupos=grupos, empresa_id=empresa_id)
+
+
+@monitor_bp.route("/numeros/detalhe/<int:empresa_id>/grupo/<int:grupo_id>")
+def numeros_detalhe_grupo(empresa_id, grupo_id):
+    """Endpoint HTMX — breakdown por câmera dentro de um grupo (grupo_id=0 → sem grupo)."""
+    restrito = _empresa_restrita()
+    if restrito is not None and restrito != empresa_id:
+        return "", 403
+
+    limite          = datetime.now(_SP).replace(tzinfo=None) - timedelta(hours=120)
+    grupo_filter_id = grupo_id or None  # 0 é o sentinel de "sem grupo" (grupo_id IS NULL)
 
     cameras = db.session.execute(text("""
         WITH cam_events AS (
@@ -471,11 +535,11 @@ def numeros_detalhe(empresa_id):
             JOIN camera c ON c.id = ev.camera_id
             WHERE ev.timestamp >= :limite
               AND c.empresa_id  = :empresa_id
+              AND c.grupo_id   <=> :grupo_id
         )
         SELECT
             c.id            AS camera_id,
             c.nome          AS camera_nome,
-            g.nome          AS grupo_nome,
             c.ultimo_status AS status_atual,
             COUNT(ce.id)              AS total_vezes_offline,
             AVG(ce.duracao_seg)       AS tempo_medio_seg,
@@ -483,11 +547,11 @@ def numeros_detalhe(empresa_id):
             SUM(ce.duracao_seg >= 180 AND ce.duracao_seg < 600) AS menos_10min,
             SUM(ce.duracao_seg >= 600)                          AS mais_10min
         FROM camera c
-        LEFT JOIN grupo_camera g  ON g.id = c.grupo_id
-        LEFT JOIN cam_events   ce ON ce.camera_id = c.id AND ce.status = 'offline'
+        LEFT JOIN cam_events ce ON ce.camera_id = c.id AND ce.status = 'offline'
         WHERE c.empresa_id = :empresa_id AND c.ativo = TRUE
-        GROUP BY c.id, c.nome, g.nome, c.ultimo_status
+          AND c.grupo_id  <=> :grupo_id
+        GROUP BY c.id, c.nome, c.ultimo_status
         ORDER BY total_vezes_offline DESC, c.nome
-    """), {"limite": limite, "empresa_id": empresa_id}).mappings().fetchall()
+    """), {"limite": limite, "empresa_id": empresa_id, "grupo_id": grupo_filter_id}).mappings().fetchall()
 
-    return render_template("partials/numeros_detalhe.html", cameras=cameras)
+    return render_template("partials/numeros_grupo_cameras.html", cameras=cameras)
