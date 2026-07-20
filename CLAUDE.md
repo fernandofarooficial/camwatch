@@ -24,6 +24,8 @@ bash deploy.sh   # git pull + pip install + systemctl restart
 
 The two systemd services are `camwatch-web` (Gunicorn on port 5005) and `camwatch-checker` (checker daemon).
 
+**VPS access:** `ssh root@72.60.58.241` (Hostinger, key-based auth already set up). App lives at `/home/workuser/camwatch`. Production DB credentials are in `.env` there — read them (`grep DB_ .env`) rather than guessing, then `mysql -u <user> -p<pass> camwatch`.
+
 ## Environment setup
 
 Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`. Optional: `DB_PORT` (default 3306), `SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `CHECKER_WORKERS` (default 80 threads), `CHECKER_LOOP_SLEEP` (default 10s), `CHECKER_TIMEOUT_SEC` (default 20s), `MASTER_PASSWORD` (grants access to all companies in the monitoring screens — if empty, master access is disabled).
@@ -110,3 +112,10 @@ Each empresa row on `/numeros` expands into a three-level drill-down, all using 
 - `/numeros/detalhe/<empresa_id>/grupo/<grupo_id>` — HTMX endpoint returning the **per-camera** breakdown for a single grupo (`partials/numeros_grupo_cameras.html`). `grupo_id=0` is the sentinel for the "Sem grupo" bucket (translated to `grupo_id IS NULL` server-side via MySQL's `<=>` null-safe equality operator).
 
 Both routes reuse the same `LEAD()` CTE pattern as the parent `/numeros` route and enforce the same company-restricted 403 check as `/numeros/detalhe/<empresa_id>` always did. Expand/collapse at the grupo level is handled by a separate `toggleDetalheGrupo()` JS function (not persisted in the URL hash, unlike the empresa-level `toggleDetalhe()`/`syncExpandURL()`, since the nested rows don't exist in the DOM until their parent empresa row has been expanded).
+
+## Troubleshooting: camera shown offline but actually reachable
+
+When an operator confirms a camera is online but the app still shows `offline`, don't assume it's a checker bug — first distinguish two cases:
+
+1. **Genuine outage** — the device is unreachable from anywhere. Test connectivity to the `camera.url_rtsp` host:port from a machine *outside* the VPS (e.g. `Test-NetConnection` or a raw TCP connect). If it fails there too, `ultimo_status = offline` is correct and no action is needed in the app.
+2. **VPS-specific network block** — the device responds fine from an outside network but times out (TCP *and* ICMP) specifically when reached from the VPS's IP (`72.60.58.241`, Hostinger ASN 47583). In this case `ffprobe` will fail every check cycle even though the stream itself is healthy — the debounce (3 failures) just confirms a false offline. Confirmed at least twice on `*.sn.mynetname.net` hosts in the `187.90.0.0/16` range. Diagnose by running the same connectivity test **from the VPS** (`timeout 5 bash -c 'cat < /dev/null > /dev/tcp/<ip>/<port>'`, or literally the same `ffprobe` command the checker runs) and comparing against a test from outside the VPS. If it only fails from the VPS, the fix is on the camera site's router/firewall (allow-list the VPS IP) — not in the CamWatch codebase.
