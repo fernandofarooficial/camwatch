@@ -122,8 +122,14 @@ def enviar_telegram(chat_id: str, mensagem: str):
 # Lógica de persistência
 # ------------------------------------------------------------------
 
-def get_cameras_due(session) -> list:
-    """Retorna câmeras ativas cujo intervalo individual já venceu."""
+def get_cameras_due(session, agora: datetime) -> list:
+    """Retorna câmeras ativas cujo intervalo individual já venceu.
+
+    Compara contra `agora` (horário de SP, calculado em Python) em vez de
+    NOW() do MySQL: `ultima_verificacao` é gravado em horário de SP, mas o
+    relógio do servidor MySQL está em UTC, então NOW() ficava ~3h à frente
+    e fazia toda câmera parecer sempre vencida, ignorando intervalo_segundos.
+    """
     sql = text("""
         SELECT
             c.id, c.nome, c.url_rtsp, c.ultimo_status, c.intervalo_segundos,
@@ -135,10 +141,10 @@ def get_cameras_due(session) -> list:
         WHERE c.ativo = TRUE
           AND (
               c.ultima_verificacao IS NULL
-              OR DATE_ADD(c.ultima_verificacao, INTERVAL c.intervalo_segundos SECOND) <= NOW()
+              OR DATE_ADD(c.ultima_verificacao, INTERVAL c.intervalo_segundos SECOND) <= :agora
           )
     """)
-    rows = session.execute(sql).mappings().all()
+    rows = session.execute(sql, {"agora": agora}).mappings().all()
     return [dict(r) for r in rows]
 
 
@@ -298,7 +304,7 @@ def run_checker():
         with app.app_context():
             with db.engine.begin() as conn_raw:
                 session = db.session
-                cameras = get_cameras_due(session)
+                cameras = get_cameras_due(session, agora)
 
                 if not cameras:
                     log.debug("Nenhuma câmera para verificar neste ciclo.")
