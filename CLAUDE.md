@@ -30,6 +30,8 @@ The two systemd services are `camwatch-web` (Gunicorn on port 5005) and `camwatc
 
 Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`. Optional: `DB_PORT` (default 3306), `SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `CHECKER_WORKERS` (default 80 threads), `CHECKER_LOOP_SLEEP` (default 10s), `CHECKER_TIMEOUT_SEC` (default 20s), `MASTER_PASSWORD` (grants access to all companies in the monitoring screens — if empty, master access is disabled).
 
+**Production `CHECKER_WORKERS` is tuned down to 24** (not the code default of 80) — the VPS only has 2 vCPUs, and 80 concurrent `ffprobe` processes oversubscribed the CPU badly, spiking load average to ~19 during large check batches. If you change camera check intervals fleet-wide (see `intervalo_segundos` below) and batches grow again, re-check load average (`uptime`, `top`) after a couple of cycles and retune this value if needed.
+
 Database schema is in `_doc/_db/db.sql` — apply it manually to a fresh MySQL database. SQLAlchemy does **not** manage migrations; schema changes must be applied by hand.
 
 ## Architecture
@@ -78,8 +80,10 @@ Session keys set on login:
 
 > **Note:** The checker's log file is hardcoded to `/var/log/camwatch_checker.log` (Linux/production path). On Windows (dev), the `FileHandler` will fail to open; redirect or remove it locally if needed.
 
+> **Timezone trap in `get_cameras_due`:** the due-check (`DATE_ADD(c.ultima_verificacao, INTERVAL c.intervalo_segundos SECOND) <= :agora`) compares against `agora` — computed once per loop iteration as naive São Paulo time in Python — not MySQL's `NOW()`. This is deliberate: `ultima_verificacao` is written in SP time, but the production MySQL server's system clock is UTC. Comparing against `NOW()` there made every camera's last-check timestamp look ~3h stale immediately after being checked, so `intervalo_segundos` was silently ignored for any camera configured under ~3h — in practice the entire active fleet got re-probed every single loop cycle (~30-40s) instead of on its configured cadence. Fixed by passing `agora` in as a bound parameter instead of relying on the DB server's clock/timezone. If you touch this query, keep the comparison anchored to Python-computed time, not `NOW()`.
+
 Infinite loop:
-1. Query cameras whose per-camera `intervalo_segundos` has elapsed (`get_cameras_due`)
+1. Query cameras whose per-camera `intervalo_segundos` has elapsed (`get_cameras_due(session, agora)`)
 2. Run `ffprobe` (must be installed on the system) in parallel via `ThreadPoolExecutor` — no video decoding, just stream probe
 3. Apply a **3-failure debounce** before marking a camera offline (counter in `_falhas` dict, resets on any online result)
 4. On status change: update `camera.ultimo_status`, insert a row into `evento_camera`
