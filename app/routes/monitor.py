@@ -6,7 +6,9 @@ Blueprint da tela de monitoramento de eventos.
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from flask import Blueprint, render_template, request, session, redirect, url_for
+import json as _json
+
+from flask import Blueprint, render_template, request, session, redirect, url_for, current_app
 from sqlalchemy import desc, func, text
 from sqlalchemy.orm import joinedload
 
@@ -447,6 +449,119 @@ def fora_do_ar_parcial():
         agora=agora,
         threshold_sec=_NOTIF_THRESHOLD_SEC,
     )
+
+
+@monitor_bp.route("/fora-do-ar/mobile/")
+def fora_do_ar_mobile():
+    """Versão mobile da tela Fora do ar — layout em cartões, sem sidebar, PWA.
+
+    A barra final na rota é proposital: o service worker é servido em
+    /fora-do-ar/mobile/sw.js e seu escopo padrão (sem cabeçalho
+    Service-Worker-Allowed) é o diretório do próprio script — precisa
+    bater exatamente com a URL desta página para poder controlá-la.
+    """
+    restrito   = _empresa_restrita()
+    empresa_id = restrito if restrito is not None else request.args.get("empresa_id", type=int)
+    grupo_id   = request.args.get("grupo_id", type=int)
+    refresh    = request.args.get("refresh", 60, type=int)
+
+    empresas = Empresa.query.filter_by(ativo=True).order_by(Empresa.nome).all()
+    grupos   = GrupoCamera.query.order_by(GrupoCamera.nome).all()
+    if restrito:
+        grupos = [g for g in grupos if g.empresa_id == restrito]
+
+    cameras, offline_desde, agora = _query_fora_do_ar(empresa_id, grupo_id)
+    resumo = _resumo_sql(restrito)
+
+    return render_template(
+        "monitor/fora_do_ar_mobile.html",
+        empresas=empresas,
+        grupos=grupos,
+        cameras=cameras,
+        offline_desde=offline_desde,
+        empresa_id=empresa_id,
+        grupo_id=grupo_id,
+        agora=agora,
+        resumo=resumo,
+        empresa_restrita=restrito,
+        refresh=refresh,
+        threshold_sec=_NOTIF_THRESHOLD_SEC,
+        threshold_min=_NOTIF_THRESHOLD_SEC // 60,
+    )
+
+
+@monitor_bp.route("/fora-do-ar/mobile/parcial")
+def fora_do_ar_mobile_parcial():
+    """Endpoint HTMX — atualiza a lista de cartões (versão mobile)."""
+    restrito   = _empresa_restrita()
+    empresa_id = restrito if restrito is not None else request.args.get("empresa_id", type=int)
+    grupo_id   = request.args.get("grupo_id", type=int)
+
+    cameras, offline_desde, agora = _query_fora_do_ar(empresa_id, grupo_id)
+    resumo = _resumo_sql(restrito)
+
+    return render_template(
+        "partials/fora_do_ar_mobile_lista.html",
+        cameras=cameras,
+        offline_desde=offline_desde,
+        empresa_id=empresa_id,
+        grupo_id=grupo_id,
+        agora=agora,
+        resumo=resumo,
+        threshold_sec=_NOTIF_THRESHOLD_SEC,
+    )
+
+
+@monitor_bp.route("/fora-do-ar/mobile/manifest.webmanifest")
+def fora_do_ar_mobile_manifest():
+    """Web app manifest do PWA — gerado via url_for para herdar o prefixo
+    de montagem (/camwatch em produção) em vez de um JSON estático fixo."""
+    manifest = {
+        "name": "CamWatch — Fora do ar",
+        "short_name": "Fora do ar",
+        "description": "Câmeras offline há mais tempo que o limiar de notificação.",
+        "start_url": url_for("monitor.fora_do_ar_mobile"),
+        "scope": url_for("monitor.fora_do_ar_mobile"),
+        "id": url_for("monitor.fora_do_ar_mobile"),
+        "display": "standalone",
+        "background_color": "#0e0f11",
+        "theme_color": "#0e0f11",
+        "orientation": "portrait",
+        "lang": "pt-BR",
+        "icons": [
+            {
+                "src": url_for("static", filename="img/icons/icon-192.png"),
+                "sizes": "192x192",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": url_for("static", filename="img/icons/icon-512.png"),
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "any",
+            },
+            {
+                "src": url_for("static", filename="img/icons/icon-maskable-512.png"),
+                "sizes": "512x512",
+                "type": "image/png",
+                "purpose": "maskable",
+            },
+        ],
+    }
+    resp = current_app.response_class(_json.dumps(manifest), mimetype="application/manifest+json")
+    return resp
+
+
+@monitor_bp.route("/fora-do-ar/mobile/sw.js")
+def fora_do_ar_mobile_sw():
+    """Service worker do PWA — servido via rota (não como estático) para que
+    o conteúdo seja gerado com url_for e herde o prefixo de montagem."""
+    conteudo = render_template("monitor/fora_do_ar_mobile_sw.js")
+    resp = current_app.response_class(conteudo, mimetype="application/javascript")
+    resp.headers["Service-Worker-Allowed"] = url_for("monitor.fora_do_ar_mobile")
+    resp.headers["Cache-Control"] = "no-cache"
+    return resp
 
 
 @monitor_bp.route("/numeros/detalhe/<int:empresa_id>")

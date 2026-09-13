@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Acesso — CamWatch</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo_camwatch.png') }}">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
@@ -14,7 +15,7 @@
     <div class="acesso-card">
 
       <div class="acesso-brand">
-        <span class="brand-icon">⬡</span>
+        <img src="{{ url_for('static', filename='img/logo_camwatch.png') }}" alt="CamWatch" class="brand-logo brand-logo-lg">
         <span class="brand-name">CamWatch</span>
       </div>
 

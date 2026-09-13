@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Fora do ar — CamWatch</title>
+
+  <!-- PWA: manifest + ícones + comportamento em tela cheia -->
+  <link rel="manifest" href="{{ url_for('monitor.fora_do_ar_mobile_manifest') }}">
+  <meta name="theme-color" content="#0e0f11">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Fora do ar">
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/logo_camwatch.png') }}">
+  <link rel="apple-touch-icon" href="{{ url_for('static', filename='img/icons/icon-180.png') }}">
+
+  <script src="https://unpkg.com/htmx.org@1.9.12"></script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/mobile.css') }}">
+</head>
+<body class="m-body">
+
+  <header class="m-topbar">
+    <div class="m-brand">
+      <img src="{{ url_for('static', filename='img/logo_camwatch.png') }}" alt="CamWatch" class="m-brand-logo">
+      <span class="m-brand-title">Fora do ar</span>
+    </div>
+    <div class="m-topbar-actions">
+      <button type="button" class="m-btn-instalar" id="btn-instalar" hidden>Instalar</button>
+      <span class="m-live-dot"></span>
+      <button type="button" class="m-icon-btn" id="btn-filtros" aria-label="Abrir filtros">☰</button>
+    </div>
+  </header>
+
+  <div class="m-updated" id="last-update">—</div>
+
+  <!-- Painel de filtros em drawer (formato próprio da versão mobile) -->
+  <div class="m-overlay" id="filtros-overlay"></div>
+  <div class="m-drawer" id="filtros-drawer">
+    <div class="m-drawer-handle"></div>
+    <form id="form-filtros-m">
+
+      {% if empresa_restrita %}
+        <input type="hidden" name="empresa_id" value="{{ empresa_restrita }}">
+      {% else %}
+      <div class="m-campo">
+        <label>Empresa</label>
+        <select name="empresa_id">
+          <option value="">Todas</option>
+          {% for e in empresas %}
+            <option value="{{ e.id }}" {% if empresa_id == e.id %}selected{% endif %}>{{ e.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      {% endif %}
+
+      <div class="m-campo">
+        <label>Grupo</label>
+        <select name="grupo_id">
+          <option value="">Todos</option>
+          {% for g in grupos %}
+            <option value="{{ g.id }}" {% if grupo_id == g.id %}selected{% endif %}>{{ g.nome }}</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="m-campo">
+        <label>Atualizar a cada</label>
+        <div class="m-segmented" id="refresh-segmented">
+          <button type="button" data-val="60"  class="{{ 'is-active' if refresh == 60  else '' }}">60s</button>
+          <button type="button" data-val="120" class="{{ 'is-active' if refresh == 120 else '' }}">120s</button>
+          <button type="button" data-val="300" class="{{ 'is-active' if refresh == 300 else '' }}">300s</button>
+        </div>
+      </div>
+
+      <button type="submit" class="m-btn-aplicar">Aplicar filtros</button>
+    </form>
+  </div>
+
+  <main class="m-content"
+        id="lista-wrapper"
+        hx-get="{{ url_for('monitor.fora_do_ar_mobile_parcial') }}"
+        hx-trigger="refresh"
+        hx-swap="innerHTML">
+    {% include "partials/fora_do_ar_mobile_lista.html" %}
+  </main>
+
+  <footer class="m-footer">
+    <span class="m-footer-empresa">{{ session.get('empresa_nome', '') }}</span>
+    <a href="{{ url_for('monitor.fora_do_ar') }}" class="m-footer-link">Versão desktop</a>
+    <a href="{{ url_for('monitor.sair') }}" class="m-footer-link">Sair</a>
+  </footer>
+
+  <script>
+    (function () {
+      const wrapper   = document.getElementById('lista-wrapper');
+      const drawer    = document.getElementById('filtros-drawer');
+      const overlay   = document.getElementById('filtros-overlay');
+      const btnAbrir  = document.getElementById('btn-filtros');
+      const form      = document.getElementById('form-filtros-m');
+      const segmented = document.getElementById('refresh-segmented');
+
+      let refreshSeg = {{ refresh }};
+      let timer = null;
+
+      function abrirDrawer() {
+        drawer.classList.add('is-open');
+        overlay.classList.add('is-open');
+      }
+      function fecharDrawer() {
+        drawer.classList.remove('is-open');
+        overlay.classList.remove('is-open');
+      }
+
+      btnAbrir.addEventListener('click', abrirDrawer);
+      overlay.addEventListener('click', fecharDrawer);
+
+      segmented.querySelectorAll('button').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          segmented.querySelectorAll('button').forEach(function (b) { b.classList.remove('is-active'); });
+          btn.classList.add('is-active');
+          refreshSeg = parseInt(btn.dataset.val, 10);
+        });
+      });
+
+      function atualizarHora() {
+        const el = document.getElementById('last-update');
+        if (el) el.textContent = 'Atualizado às ' + new Date().toLocaleTimeString('pt-BR');
+      }
+
+      function reiniciarTimer() {
+        if (timer) clearInterval(timer);
+        timer = setInterval(function () { htmx.trigger(wrapper, 'refresh'); }, refreshSeg * 1000);
+      }
+
+      function aplicarFiltros(e) {
+        e.preventDefault();
+        const params = new URLSearchParams();
+        new FormData(form).forEach(function (val, key) { if (val) params.set(key, val); });
+        params.set('refresh', refreshSeg);
+        const qs = params.toString();
+        history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+        const base = "{{ url_for('monitor.fora_do_ar_mobile_parcial') }}";
+        wrapper.setAttribute('hx-get', base + (qs ? '?' + qs : ''));
+        htmx.process(wrapper);
+        htmx.trigger(wrapper, 'refresh');
+        reiniciarTimer();
+        fecharDrawer();
+      }
+
+      form.addEventListener('submit', aplicarFiltros);
+
+      document.body.addEventListener('htmx:afterSwap', function (e) {
+        if (e.detail.target.id === 'lista-wrapper') atualizarHora();
+      });
+
+      atualizarHora();
+      reiniciarTimer();
+
+      // PWA: registra o service worker (escopo = esta própria página)
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker
+            .register("{{ url_for('monitor.fora_do_ar_mobile_sw') }}")
+            .catch(function (err) { console.warn('SW não registrado:', err); });
+        });
+      }
+
+      // PWA: botão de instalação (Android/Chrome — dispara beforeinstallprompt).
+      // No iOS/Safari não existe esse evento; a instalação é manual via
+      // Compartilhar → Adicionar à Tela de Início, sem forma de automatizar.
+      const btnInstalar = document.getElementById('btn-instalar');
+      let promptAdiado = null;
+
+      window.addEventListener('beforeinstallprompt', function (e) {
+        e.preventDefault();
+        promptAdiado = e;
+        btnInstalar.hidden = false;
+      });
+
+      btnInstalar.addEventListener('click', function () {
+        if (!promptAdiado) return;
+        btnInstalar.hidden = true;
+        promptAdiado.prompt();
+        promptAdiado = null;
+      });
+
+      window.addEventListener('appinstalled', function () {
+        btnInstalar.hidden = true;
+        promptAdiado = null;
+      });
+    })();
+  </script>
+
+</body>
+</html>

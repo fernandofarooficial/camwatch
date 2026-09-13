@@ -1,0 +1,54 @@
+<div class="m-stats">
+  <div class="m-stat">
+    <span class="m-stat-val">{{ resumo.total or 0 }}</span>
+    <span class="m-stat-lbl">Total</span>
+  </div>
+  <div class="m-stat m-stat-online">
+    <span class="m-stat-val">{{ resumo.online or 0 }}</span>
+    <span class="m-stat-lbl">Online</span>
+  </div>
+  <div class="m-stat m-stat-offline">
+    <span class="m-stat-val">{{ resumo.offline or 0 }}</span>
+    <span class="m-stat-lbl">Offline</span>
+  </div>
+</div>
+
+<div class="m-count">
+  {{ cameras|length }} câmera{{ 's' if cameras|length != 1 else '' }} fora do ar há mais de {{ threshold_sec }}s
+</div>
+
+{% if cameras %}
+<div class="m-lista">
+  {% for cam in cameras %}
+    {% set od = offline_desde.get(cam.id) %}
+    {% set seg = ((agora - od).total_seconds()) | int if od else 0 %}
+    <div class="m-card">
+      <div class="m-card-top">
+        <span class="m-card-nome">{{ cam.nome }}</span>
+        <span class="m-dur {{ 'm-dur-critica' if seg >= 3600 else '' }}">
+          {% if seg >= 3600 %}
+            {{ seg // 3600 }}h {{ (seg % 3600) // 60 }}min
+          {% elif seg >= 60 %}
+            {{ seg // 60 }}min {{ seg % 60 }}s
+          {% else %}
+            {{ seg }}s
+          {% endif %}
+        </span>
+      </div>
+      <div class="m-card-meta">
+        <span class="m-card-empresa">{{ cam.empresa.nome }}</span>
+        <span class="m-dot-sep">•</span>
+        <span>{{ cam.grupo.nome if cam.grupo else 'Sem grupo' }}</span>
+      </div>
+      <div class="m-card-since">
+        Offline desde {{ od.strftime('%d/%m %H:%M') if od else '—' }}
+      </div>
+    </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="m-vazio">
+  <span class="m-vazio-icon">✓</span>
+  <span>Nenhuma câmera fora do ar no momento</span>
+</div>
+{% endif %}

@@ -1,0 +1,366 @@
+/* =============================================================
+   CamWatch — mobile.css
+   Versão mobile da tela "Fora do ar" — layout em cartões verticais,
+   sem sidebar, otimizado para toque. Formato independente do
+   desktop (main.css); não compartilha classes com a versão web.
+   ============================================================= */
+
+:root {
+  --m-bg:        #0e0f11;
+  --m-bg2:       #16181c;
+  --m-bg3:       #1e2128;
+  --m-border:    #2a2d35;
+
+  --m-text:      #e8e9ec;
+  --m-text2:     #9096a8;
+  --m-text3:     #5c6270;
+
+  --m-amber:     #f0a500;
+  --m-green:     #22c55e;
+  --m-green-dim: #14532d;
+  --m-red:       #ef4444;
+  --m-red-dim:   #7f1d1d;
+
+  --m-font:      'DM Sans', sans-serif;
+  --m-mono:      'DM Mono', monospace;
+  --m-radius:    14px;
+}
+
+* , *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body { height: 100%; }
+
+.m-body {
+  font-family: var(--m-font);
+  background: var(--m-bg);
+  color: var(--m-text);
+  font-size: 15px;
+  line-height: 1.4;
+  padding-bottom: calc(84px + env(safe-area-inset-bottom)); /* espaço para o rodapé fixo */
+  -webkit-tap-highlight-color: transparent;
+}
+
+a { color: inherit; text-decoration: none; }
+button { font-family: var(--m-font); cursor: pointer; }
+
+/* ------ Barra superior fixa -------------------------------- */
+.m-topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  padding-top: calc(14px + env(safe-area-inset-top));
+  background: var(--m-bg2);
+  border-bottom: 1px solid var(--m-border);
+}
+.m-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.m-brand-icon { font-size: 18px; color: var(--m-amber); }
+.m-brand-logo {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.m-brand-title { font-size: 16px; font-weight: 600; letter-spacing: 0.01em; }
+
+.m-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.m-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--m-green);
+  animation: m-pulse-dot 2s ease-in-out infinite;
+}
+@keyframes m-pulse-dot {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.3; }
+}
+.m-btn-instalar {
+  padding: 6px 12px;
+  background: var(--m-amber);
+  color: #000;
+  border: none;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 700;
+}
+.m-btn-instalar:active { opacity: 0.85; }
+.m-btn-instalar[hidden] { display: none; }
+
+.m-icon-btn {
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--m-bg3);
+  border: 1px solid var(--m-border);
+  border-radius: 10px;
+  color: var(--m-text);
+  font-size: 16px;
+}
+.m-icon-btn:active { background: var(--m-border); }
+
+.m-updated {
+  padding: 8px 16px 0;
+  font-size: 11px;
+  font-family: var(--m-mono);
+  color: var(--m-text3);
+}
+
+/* ------ Conteúdo principal ---------------------------------- */
+.m-content {
+  padding: 12px 16px 16px;
+}
+
+/* Tiras de estatísticas — formato horizontal compacto, sem grid de cards */
+.m-stats {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.m-stat {
+  flex: 1;
+  background: var(--m-bg2);
+  border: 1px solid var(--m-border);
+  border-radius: 12px;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+.m-stat-val {
+  font-family: var(--m-mono);
+  font-size: 20px;
+  font-weight: 500;
+}
+.m-stat-online .m-stat-val  { color: var(--m-green); }
+.m-stat-offline .m-stat-val { color: var(--m-red); }
+.m-stat-lbl {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--m-text3);
+}
+
+.m-count {
+  font-size: 12px;
+  color: var(--m-text3);
+  font-family: var(--m-mono);
+  margin-bottom: 10px;
+}
+
+/* ------ Lista de cartões (substitui a tabela do desktop) ---- */
+.m-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.m-card {
+  background: var(--m-bg2);
+  border: 1px solid var(--m-border);
+  border-left: 3px solid var(--m-red);
+  border-radius: var(--m-radius);
+  padding: 14px 16px;
+}
+.m-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.m-card-nome {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--m-text);
+}
+.m-dur {
+  font-family: var(--m-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--m-red);
+  background: var(--m-red-dim);
+  padding: 4px 10px;
+  border-radius: 20px;
+  white-space: nowrap;
+}
+.m-dur-critica {
+  animation: m-pulse-dur 2s ease-in-out infinite;
+}
+@keyframes m-pulse-dur {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+.m-card-meta {
+  font-size: 12px;
+  color: var(--m-text2);
+  margin-bottom: 6px;
+}
+.m-card-empresa { color: var(--m-text2); }
+.m-dot-sep { margin: 0 5px; color: var(--m-text3); }
+.m-card-since {
+  font-size: 11px;
+  font-family: var(--m-mono);
+  color: var(--m-text3);
+}
+
+/* Estado vazio */
+.m-vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 56px 16px;
+  color: var(--m-text3);
+  font-size: 13px;
+  text-align: center;
+}
+.m-vazio-icon {
+  font-size: 28px;
+  color: var(--m-green);
+}
+
+/* ------ Drawer de filtros (formato próprio da versão mobile) */
+.m-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 200ms ease;
+  z-index: 30;
+}
+.m-overlay.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.m-drawer {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 31;
+  background: var(--m-bg2);
+  border-top: 1px solid var(--m-border);
+  border-radius: 18px 18px 0 0;
+  padding: 10px 18px 22px;
+  transform: translateY(100%);
+  transition: transform 240ms ease;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.m-drawer.is-open { transform: translateY(0); }
+
+.m-drawer-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--m-border);
+  margin: 4px auto 16px;
+}
+
+.m-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+.m-campo label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--m-text3);
+  font-weight: 500;
+}
+.m-campo select {
+  width: 100%;
+  font-family: var(--m-font);
+  font-size: 15px;
+  background: var(--m-bg3);
+  color: var(--m-text);
+  border: 1px solid var(--m-border);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+
+.m-segmented {
+  display: flex;
+  gap: 6px;
+}
+.m-segmented button {
+  flex: 1;
+  padding: 10px 0;
+  background: var(--m-bg3);
+  border: 1px solid var(--m-border);
+  border-radius: 10px;
+  color: var(--m-text2);
+  font-size: 13px;
+  font-family: var(--m-mono);
+}
+.m-segmented button.is-active {
+  background: var(--m-amber);
+  border-color: var(--m-amber);
+  color: #000;
+  font-weight: 600;
+}
+
+.m-btn-aplicar {
+  width: 100%;
+  padding: 14px;
+  background: var(--m-amber);
+  color: #000;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.m-btn-aplicar:active { opacity: 0.85; }
+
+/* ------ Rodapé fixo ------------------------------------------ */
+.m-footer {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 16px;
+  padding-bottom: calc(12px + env(safe-area-inset-bottom));
+  background: var(--m-bg2);
+  border-top: 1px solid var(--m-border);
+  font-size: 12px;
+}
+.m-footer-empresa {
+  color: var(--m-amber);
+  font-family: var(--m-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.m-footer-link {
+  color: var(--m-text2);
+  white-space: nowrap;
+}
+.m-footer-link:active { color: var(--m-amber); }
+
+/* Telas bem estreitas: reduz um pouco o texto das estatísticas */
+@media (max-width: 340px) {
+  .m-stat-val { font-size: 17px; }
+  .m-brand-title { font-size: 14px; }
+}

@@ -83,6 +83,18 @@ select option { background: var(--bg3); }
   color: var(--amber);
   line-height: 1;
 }
+.brand-logo {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+.brand-logo-lg {
+  width: 44px;
+  height: 44px;
+  border-radius: 9px;
+}
 .brand-name {
   font-size: 15px;
   font-weight: 600;
