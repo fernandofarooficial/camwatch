@@ -38,8 +38,8 @@ class Config:
     CHECKER_TIMEOUT_SEC   = int(os.getenv("CHECKER_TIMEOUT_SEC",   "20"))   # timeout por câmera
     # Máximo de câmeras por ciclo — evita que um atraso vire uma varredura da frota inteira
     CHECKER_MAX_POR_CICLO = int(os.getenv("CHECKER_MAX_POR_CICLO", "200"))
-    # Load average (1 min) acima do qual timeouts não contam como offline; 0 = 2 × nº de CPUs
-    CHECKER_LOAD_MAX      = float(os.getenv("CHECKER_LOAD_MAX", "0")) or 2.0 * (os.cpu_count() or 1)
+    # % de CPU ocupada da VPS durante o ciclo acima do qual timeouts não contam como offline
+    CHECKER_CPU_MAX       = int(os.getenv("CHECKER_CPU_MAX", "90"))
 
     # Tempo mínimo de offline antes de enviar alerta Telegram e exibir na tela "Fora do ar"
     NOTIF_THRESHOLD_SEC = int(os.getenv("NOTIF_THRESHOLD_SEC", "600"))  # padrão 10 minutos

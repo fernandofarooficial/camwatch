@@ -5,7 +5,7 @@ Daemon de verificação RTSP.
 Fluxo:
   1. Busca até CHECKER_MAX_POR_CICLO câmeras cujo intervalo já venceu (mais atrasadas primeiro)
   2. Verifica cada uma em paralelo via FFprobe (sem decodificar vídeo)
-     — se o load average passar de CHECKER_LOAD_MAX, timeouts são inconclusivos
+     — se a CPU da VPS passou de CHECKER_CPU_MAX% no ciclo, timeouts são inconclusivos
   3. Se o status mudou → grava evento_camera + atualiza camera
   4. Se voltou online   → preenche duracao_offline_segundos no último evento offline
   5. Se não mudou      → apenas atualiza ultima_verificacao
@@ -68,7 +68,7 @@ def check_rtsp(url: str, timeout: int = Config.CHECKER_TIMEOUT_SEC) -> tuple[str
     """Retorna ("online" | "offline" | "timeout", horário SP em que a verificação terminou).
 
     "timeout" é separado de "offline" porque, com a CPU saturada, o próprio
-    ffprobe estoura o tempo — ver _sistema_sobrecarregado().
+    ffprobe estoura o tempo — ver _cpu_ocupada().
     -probesize/-analyzeduration mínimos: basta o handshake RTSP e o codec do
     primeiro pacote, sem analisar segundos de stream (sondagem ~3× mais rápida).
     """
@@ -100,17 +100,33 @@ def check_rtsp(url: str, timeout: int = Config.CHECKER_TIMEOUT_SEC) -> tuple[str
     return status, datetime.now(_SP).replace(tzinfo=None)
 
 
-def _sistema_sobrecarregado() -> float | None:
-    """Retorna o load average de 1 min se acima de CHECKER_LOAD_MAX, senão None.
+def _cpu_amostra() -> tuple[int, int] | None:
+    """(tempo ocioso, tempo total) acumulados da CPU, de /proc/stat. None fora do Linux."""
+    try:
+        with open("/proc/stat") as f:
+            campos = [int(x) for x in f.readline().split()[1:9]]
+    except OSError:
+        return None
+    # idle + iowait = ocioso; steal (limitação do hypervisor) conta como ocupado
+    return campos[3] + campos[4], sum(campos)
+
+
+def _cpu_ocupada(inicio: tuple[int, int] | None) -> float | None:
+    """Retorna o % de CPU ocupada da VPS desde `inicio` (None se indisponível).
+
+    Acima de CHECKER_CPU_MAX, os timeouts do ciclo são tratados como inconclusivos.
 
     Sob CPU saturada (ou limitada pela Hostinger) os ffprobe estouram o timeout
     em massa e câmeras saudáveis seriam marcadas offline — no incidente de
     06/10/2026 foram 132 falsos offline num único ciclo.
+
+    Não usa load average: com o CPUQuota do systemd, os ffprobe estrangulados
+    pela cota contam como runnable e o load passa de 5 com a VPS 70% ociosa.
     """
-    if not hasattr(os, "getloadavg"):  # Windows (dev)
+    fim = _cpu_amostra()
+    if inicio is None or fim is None or fim[1] <= inicio[1]:
         return None
-    carga = os.getloadavg()[0]
-    return carga if carga > Config.CHECKER_LOAD_MAX else None
+    return 100.0 * (1 - (fim[0] - inicio[0]) / (fim[1] - inicio[1]))
 
 
 # ------------------------------------------------------------------
@@ -339,7 +355,7 @@ def run_checker():
     log.info("CamWatch Checker iniciado.")
     log.info(f"Workers: {Config.CHECKER_WORKERS} | "
              f"Máx. por ciclo: {Config.CHECKER_MAX_POR_CICLO} | "
-             f"Load máx.: {Config.CHECKER_LOAD_MAX} | "
+             f"CPU máx.: {Config.CHECKER_CPU_MAX}% | "
              f"Loop sleep: {Config.CHECKER_LOOP_SLEEP}s | "
              f"Timeout por câmera: {Config.CHECKER_TIMEOUT_SEC}s")
 
@@ -357,7 +373,8 @@ def run_checker():
                     continue
 
                 log.info(f"Verificando {len(cameras)} câmeras...")
-                inicio = time.monotonic()
+                inicio     = time.monotonic()
+                cpu_inicio = _cpu_amostra()
 
                 resultados = []
                 with ThreadPoolExecutor(max_workers=Config.CHECKER_WORKERS) as executor:
@@ -368,17 +385,18 @@ def run_checker():
                     for future in as_completed(futures):
                         resultados.append((futures[future], *future.result()))
 
-                carga = _sistema_sobrecarregado()
+                cpu        = _cpu_ocupada(cpu_inicio)
+                sobrecarga = cpu is not None and cpu > Config.CHECKER_CPU_MAX
                 timeouts = sum(1 for _, r, _ in resultados if r == "timeout")
-                if carga is not None and timeouts:
-                    log.warning(f"Sistema sobrecarregado (load {carga:.1f} > "
-                                f"{Config.CHECKER_LOAD_MAX}): {timeouts} timeouts "
+                if sobrecarga and timeouts:
+                    log.warning(f"Sistema sobrecarregado (CPU {cpu:.0f}% > "
+                                f"{Config.CHECKER_CPU_MAX}%): {timeouts} timeouts "
                                 f"tratados como inconclusivos neste ciclo.")
 
                 notificacoes = []
                 for cam, resultado, ts in resultados:
                     try:
-                        if resultado == "timeout" and carga is not None:
+                        if resultado == "timeout" and sobrecarga:
                             marcar_verificada(session, cam, ts)
                             continue
                         novo_status = "online" if resultado == "online" else "offline"
@@ -390,8 +408,9 @@ def run_checker():
 
                 try:
                     session.commit()
+                    cpu_txt = f", CPU {cpu:.0f}%" if cpu is not None else ""
                     log.info(f"Ciclo concluído e commit realizado "
-                             f"({time.monotonic() - inicio:.0f}s).")
+                             f"({time.monotonic() - inicio:.0f}s{cpu_txt}).")
                     for notif in notificacoes:
                         enviar_telegram(notif["chat_id"], notif["mensagem"])
                 except Exception as e:
