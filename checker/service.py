@@ -3,8 +3,9 @@ checker/service.py — CamWatch
 Daemon de verificação RTSP.
 
 Fluxo:
-  1. Busca câmeras cujo intervalo individual já venceu
+  1. Busca até CHECKER_MAX_POR_CICLO câmeras cujo intervalo já venceu (mais atrasadas primeiro)
   2. Verifica cada uma em paralelo via FFprobe (sem decodificar vídeo)
+     — se o load average passar de CHECKER_LOAD_MAX, timeouts são inconclusivos
   3. Se o status mudou → grava evento_camera + atualiza camera
   4. Se voltou online   → preenche duracao_offline_segundos no último evento offline
   5. Se não mudou      → apenas atualiza ultima_verificacao
@@ -14,12 +15,13 @@ Fluxo:
 
 import json
 import logging
+import random
 import subprocess
 import sys
 import time
 import urllib.request
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
@@ -62,13 +64,22 @@ log = logging.getLogger("camwatch.checker")
 # Verificação RTSP via FFprobe
 # ------------------------------------------------------------------
 
-def check_rtsp(url: str, timeout: int = Config.CHECKER_TIMEOUT_SEC) -> bool:
+def check_rtsp(url: str, timeout: int = Config.CHECKER_TIMEOUT_SEC) -> tuple[str, datetime]:
+    """Retorna ("online" | "offline" | "timeout", horário SP em que a verificação terminou).
+
+    "timeout" é separado de "offline" porque, com a CPU saturada, o próprio
+    ffprobe estoura o tempo — ver _sistema_sobrecarregado().
+    -probesize/-analyzeduration mínimos: basta o handshake RTSP e o codec do
+    primeiro pacote, sem analisar segundos de stream (sondagem ~3× mais rápida).
+    """
     try:
         result = subprocess.run(
             [
                 "ffprobe",
                 "-v", "quiet",
                 "-rtsp_transport", "tcp",
+                "-probesize", "32768",
+                "-analyzeduration", "0",
                 "-i", url,
                 "-select_streams", "v:0",
                 "-show_entries", "stream=codec_name",
@@ -77,15 +88,29 @@ def check_rtsp(url: str, timeout: int = Config.CHECKER_TIMEOUT_SEC) -> bool:
             timeout=timeout,
             capture_output=True,
         )
-        return result.returncode == 0
+        status = "online" if result.returncode == 0 else "offline"
     except subprocess.TimeoutExpired:
-        return False
+        status = "timeout"
     except FileNotFoundError:
         log.error("FFprobe não encontrado. Instale com: apt install ffmpeg")
-        return False
+        status = "offline"
     except Exception as e:
         log.warning(f"Erro ao verificar {url}: {e}")
-        return False
+        status = "offline"
+    return status, datetime.now(_SP).replace(tzinfo=None)
+
+
+def _sistema_sobrecarregado() -> float | None:
+    """Retorna o load average de 1 min se acima de CHECKER_LOAD_MAX, senão None.
+
+    Sob CPU saturada (ou limitada pela Hostinger) os ffprobe estouram o timeout
+    em massa e câmeras saudáveis seriam marcadas offline — no incidente de
+    06/10/2026 foram 132 falsos offline num único ciclo.
+    """
+    if not hasattr(os, "getloadavg"):  # Windows (dev)
+        return None
+    carga = os.getloadavg()[0]
+    return carga if carga > Config.CHECKER_LOAD_MAX else None
 
 
 # ------------------------------------------------------------------
@@ -122,13 +147,18 @@ def enviar_telegram(chat_id: str, mensagem: str):
 # Lógica de persistência
 # ------------------------------------------------------------------
 
-def get_cameras_due(session, agora: datetime) -> list:
-    """Retorna câmeras ativas cujo intervalo individual já venceu.
+def get_cameras_due(session, agora: datetime, limite: int) -> list:
+    """Retorna até `limite` câmeras ativas cujo intervalo individual já venceu,
+    as mais atrasadas primeiro.
 
     Compara contra `agora` (horário de SP, calculado em Python) em vez de
     NOW() do MySQL: `ultima_verificacao` é gravado em horário de SP, mas o
     relógio do servidor MySQL está em UTC, então NOW() ficava ~3h à frente
     e fazia toda câmera parecer sempre vencida, ignorando intervalo_segundos.
+
+    O LIMIT impede o efeito bola de neve: sem ele, um ciclo lento deixava a
+    frota inteira vencida, o ciclo seguinte pegava todas e ficava mais lento
+    ainda — o checker passava a sondar as 369 câmeras sem parar.
     """
     sql = text("""
         SELECT
@@ -143,9 +173,25 @@ def get_cameras_due(session, agora: datetime) -> list:
               c.ultima_verificacao IS NULL
               OR DATE_ADD(c.ultima_verificacao, INTERVAL c.intervalo_segundos SECOND) <= :agora
           )
+        ORDER BY c.ultima_verificacao IS NOT NULL,
+                 DATE_ADD(c.ultima_verificacao, INTERVAL c.intervalo_segundos SECOND)
+        LIMIT :limite
     """)
-    rows = session.execute(sql, {"agora": agora}).mappings().all()
+    rows = session.execute(sql, {"agora": agora, "limite": limite}).mappings().all()
     return [dict(r) for r in rows]
+
+
+def marcar_verificada(session, cam: dict, agora: datetime):
+    """Grava ultima_verificacao recuada por um jitter de até 10% do intervalo.
+
+    Sem o jitter, câmeras com o mesmo intervalo verificadas no mesmo ciclo
+    vencem juntas para sempre e chegam em rajada (ex.: 292 câmeras de 75 s).
+    """
+    jitter = random.uniform(0, cam["intervalo_segundos"] * 0.1)
+    session.execute(
+        text("UPDATE camera SET ultima_verificacao = :ts WHERE id = :id"),
+        {"ts": agora - timedelta(seconds=jitter), "id": cam["id"]},
+    )
 
 
 def processar_resultado(session, cam: dict, novo_status: str, agora: datetime) -> dict | None:
@@ -156,10 +202,7 @@ def processar_resultado(session, cam: dict, novo_status: str, agora: datetime) -
     status_atual = cam["ultimo_status"]
     camera_id    = cam["id"]
 
-    session.execute(
-        text("UPDATE camera SET ultima_verificacao = :ts WHERE id = :id"),
-        {"ts": agora, "id": camera_id},
-    )
+    marcar_verificada(session, cam, agora)
 
     if novo_status == "online":
         _falhas[camera_id] = 0
@@ -295,6 +338,8 @@ def run_checker():
 
     log.info("CamWatch Checker iniciado.")
     log.info(f"Workers: {Config.CHECKER_WORKERS} | "
+             f"Máx. por ciclo: {Config.CHECKER_MAX_POR_CICLO} | "
+             f"Load máx.: {Config.CHECKER_LOAD_MAX} | "
              f"Loop sleep: {Config.CHECKER_LOOP_SLEEP}s | "
              f"Timeout por câmera: {Config.CHECKER_TIMEOUT_SEC}s")
 
@@ -304,7 +349,7 @@ def run_checker():
         with app.app_context():
             with db.engine.begin() as conn_raw:
                 session = db.session
-                cameras = get_cameras_due(session, agora)
+                cameras = get_cameras_due(session, agora, Config.CHECKER_MAX_POR_CICLO)
 
                 if not cameras:
                     log.debug("Nenhuma câmera para verificar neste ciclo.")
@@ -312,26 +357,41 @@ def run_checker():
                     continue
 
                 log.info(f"Verificando {len(cameras)} câmeras...")
+                inicio = time.monotonic()
 
-                notificacoes = []
+                resultados = []
                 with ThreadPoolExecutor(max_workers=Config.CHECKER_WORKERS) as executor:
                     futures = {
                         executor.submit(check_rtsp, cam["url_rtsp"]): cam
                         for cam in cameras
                     }
                     for future in as_completed(futures):
-                        cam         = futures[future]
-                        novo_status = "online" if future.result() else "offline"
-                        try:
-                            notif = processar_resultado(session, cam, novo_status, agora)
-                            if notif:
-                                notificacoes.append(notif)
-                        except Exception as e:
-                            log.error(f"Erro ao processar câmera {cam['id']}: {e}")
+                        resultados.append((futures[future], *future.result()))
+
+                carga = _sistema_sobrecarregado()
+                timeouts = sum(1 for _, r, _ in resultados if r == "timeout")
+                if carga is not None and timeouts:
+                    log.warning(f"Sistema sobrecarregado (load {carga:.1f} > "
+                                f"{Config.CHECKER_LOAD_MAX}): {timeouts} timeouts "
+                                f"tratados como inconclusivos neste ciclo.")
+
+                notificacoes = []
+                for cam, resultado, ts in resultados:
+                    try:
+                        if resultado == "timeout" and carga is not None:
+                            marcar_verificada(session, cam, ts)
+                            continue
+                        novo_status = "online" if resultado == "online" else "offline"
+                        notif = processar_resultado(session, cam, novo_status, ts)
+                        if notif:
+                            notificacoes.append(notif)
+                    except Exception as e:
+                        log.error(f"Erro ao processar câmera {cam['id']}: {e}")
 
                 try:
                     session.commit()
-                    log.info("Ciclo concluído e commit realizado.")
+                    log.info(f"Ciclo concluído e commit realizado "
+                             f"({time.monotonic() - inicio:.0f}s).")
                     for notif in notificacoes:
                         enviar_telegram(notif["chat_id"], notif["mensagem"])
                 except Exception as e:

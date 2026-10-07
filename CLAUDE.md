@@ -28,9 +28,16 @@ The two systemd services are `camwatch-web` (Gunicorn on port 5005) and `camwatc
 
 ## Environment setup
 
-Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`. Optional: `DB_PORT` (default 3306), `SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `CHECKER_WORKERS` (default 80 threads), `CHECKER_LOOP_SLEEP` (default 10s), `CHECKER_TIMEOUT_SEC` (default 20s), `MASTER_PASSWORD` (grants access to all companies in the monitoring screens — if empty, master access is disabled).
+Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USER`, `DB_PASSWORD`, `DB_HOST`, `DB_NAME`. Optional: `DB_PORT` (default 3306), `SECRET_KEY`, `TELEGRAM_BOT_TOKEN`, `CHECKER_WORKERS` (default 20 threads), `CHECKER_MAX_POR_CICLO` (default 200), `CHECKER_LOAD_MAX` (default 2 × CPU count), `CHECKER_LOOP_SLEEP` (default 10s), `CHECKER_TIMEOUT_SEC` (default 20s), `MASTER_PASSWORD` (grants access to all companies in the monitoring screens — if empty, master access is disabled).
 
-**Production `CHECKER_WORKERS` is tuned down to 24** (not the code default of 80) — the VPS only has 2 vCPUs, and 80 concurrent `ffprobe` processes oversubscribed the CPU badly, spiking load average to ~19 during large check batches. If you change camera check intervals fleet-wide (see `intervalo_segundos` below) and batches grow again, re-check load average (`uptime`, `top`) after a couple of cycles and retune this value if needed.
+**Checker CPU protection (after the 2026-10-06 incident).** The VPS has only 2 vCPUs and Hostinger throttles it after sustained saturation. A single `ffprobe` costs only ~0.1–0.15 CPU-s (measured; switching to `subtype=1` does **not** help), so the danger is not per-probe cost but a **snowball**: one slow cycle left the whole fleet due, the next cycle took all 369 cameras, ran even slower, and from then on the checker probed the fleet nonstop (load ~19, 132 false offlines in one cycle, Telegram 429 flood) until restarted. Defences, keep them all:
+- `camwatch-checker.service` has `CPUQuota=100%` + `Nice=10` (hard ceiling: 1 vCPU). `deploy.sh` does **not** install unit files — after editing the unit, copy it to `/etc/systemd/system/` and `systemctl daemon-reload`.
+- `get_cameras_due` takes at most `CHECKER_MAX_POR_CICLO` cameras, most overdue first.
+- `ultima_verificacao` is written with the real per-camera completion time minus a random jitter of up to 10% of `intervalo_segundos` (`marcar_verificada`), so cameras with the same interval don't stay synchronized into bursts.
+- `check_rtsp` returns `"timeout"` separately; if the 1-min load average is above `CHECKER_LOAD_MAX`, timeouts in that cycle are inconclusive (no debounce increment, no status change).
+- `ffprobe` runs with `-probesize 32768 -analyzeduration 0` (~3× shorter wall time, so each worker slot frees up sooner). Validated against the whole online fleet before rollout.
+
+Throughput rule of thumb: with ~13% of cameras offline (each holding a worker for the full `CHECKER_TIMEOUT_SEC`), fewer than ~16 workers can't keep up with the ~4.7 probes/s the fleet demands at its current intervals. If you lower workers or shorten intervals, watch the `Ciclo concluído (Ns)` log lines and `uptime` for a few cycles.
 
 Database schema is in `_doc/_db/db.sql` — apply it manually to a fresh MySQL database. SQLAlchemy does **not** manage migrations; schema changes must be applied by hand.
 
@@ -83,7 +90,7 @@ Session keys set on login:
 > **Timezone trap in `get_cameras_due`:** the due-check (`DATE_ADD(c.ultima_verificacao, INTERVAL c.intervalo_segundos SECOND) <= :agora`) compares against `agora` — computed once per loop iteration as naive São Paulo time in Python — not MySQL's `NOW()`. This is deliberate: `ultima_verificacao` is written in SP time, but the production MySQL server's system clock is UTC. Comparing against `NOW()` there made every camera's last-check timestamp look ~3h stale immediately after being checked, so `intervalo_segundos` was silently ignored for any camera configured under ~3h — in practice the entire active fleet got re-probed every single loop cycle (~30-40s) instead of on its configured cadence. Fixed by passing `agora` in as a bound parameter instead of relying on the DB server's clock/timezone. If you touch this query, keep the comparison anchored to Python-computed time, not `NOW()`.
 
 Infinite loop:
-1. Query cameras whose per-camera `intervalo_segundos` has elapsed (`get_cameras_due(session, agora)`)
+1. Query up to `CHECKER_MAX_POR_CICLO` cameras whose per-camera `intervalo_segundos` has elapsed, most overdue first (`get_cameras_due(session, agora, limite)`)
 2. Run `ffprobe` (must be installed on the system) in parallel via `ThreadPoolExecutor` — no video decoding, just stream probe
 3. Apply a **3-failure debounce** before marking a camera offline (counter in `_falhas` dict, resets on any online result)
 4. On status change: update `camera.ultimo_status`, insert a row into `evento_camera`

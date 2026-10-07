@@ -9,6 +9,10 @@ Environment="PATH=/home/workuser/camwatch/venv/bin:/usr/local/bin:/usr/bin:/bin"
 ExecStart=/home/workuser/camwatch/venv/bin/python checker/service.py
 Restart=always
 RestartSec=10
+# Teto de CPU: no máximo 1 dos 2 vCPUs, prioridade baixa. Impede que o checker
+# sature a VPS (incidente 06/10/2026 — Hostinger aplicou limitação de CPU).
+CPUQuota=100%
+Nice=10
 StandardOutput=journal
 StandardError=journal
 
