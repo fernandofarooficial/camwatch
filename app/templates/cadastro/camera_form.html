@@ -68,9 +68,9 @@
       <label for="intervalo_segundos">Intervalo de verificação (segundos)</label>
       <div style="display:flex; align-items:center; gap:12px;">
         <input type="number" id="intervalo_segundos" name="intervalo_segundos"
-               value="{{ camera.intervalo_segundos if camera else 60 }}"
+               value="{{ camera.intervalo_segundos if camera else 300 }}"
                min="10" max="3600" style="width:120px;">
-        <span class="form-hint-text">Mínimo 10s · padrão 60s</span>
+        <span class="form-hint-text">Mínimo 10s · padrão 300s</span>
       </div>
     </div>
 

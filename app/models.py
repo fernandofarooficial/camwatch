@@ -109,7 +109,7 @@ class Camera(db.Model):
     empresa_id         = db.Column(db.Integer,     db.ForeignKey("empresa.id"),      nullable=False)
     grupo_id           = db.Column(db.Integer,     db.ForeignKey("grupo_camera.id"), nullable=True)
     ativo              = db.Column(db.Boolean,     nullable=False, default=True)
-    intervalo_segundos = db.Column(db.Integer,     nullable=False, default=60)
+    intervalo_segundos = db.Column(db.Integer,     nullable=False, default=300)
     ultimo_status      = db.Column(
         db.Enum(StatusCamera),
         nullable=False,

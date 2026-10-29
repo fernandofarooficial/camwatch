@@ -235,7 +235,7 @@ def camera_nova():
         url_rtsp = request.form.get("url_rtsp", "").strip()
         eid      = empresa_id or request.form.get("empresa_id", type=int)
         grupo_id = request.form.get("grupo_id", type=int) or None
-        intervalo = request.form.get("intervalo_segundos", 60, type=int)
+        intervalo = request.form.get("intervalo_segundos", 300, type=int)
         if not nome or not url_rtsp or not eid:
             flash("Nome, URL RTSP e empresa são obrigatórios.", "erro")
             return render_template("cadastro/camera_form.html",
@@ -283,7 +283,7 @@ def camera_editar(id):
         camera.url_rtsp           = url_rtsp
         camera.empresa_id         = eid
         camera.grupo_id           = request.form.get("grupo_id", type=int) or None
-        camera.intervalo_segundos = request.form.get("intervalo_segundos", 60, type=int)
+        camera.intervalo_segundos = request.form.get("intervalo_segundos", 300, type=int)
         camera.ativo              = "ativo" in request.form
         db.session.commit()
         flash("Câmera atualizada.", "ok")
