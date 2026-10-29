@@ -37,7 +37,9 @@ Copy `env.example` to `.env` and fill in the values. Required variables: `DB_USE
 - `check_rtsp` returns `"timeout"` separately; if the VPS's overall CPU busy % during the cycle (from `/proc/stat`, steal counted as busy) is above `CHECKER_CPU_MAX`, timeouts in that cycle are inconclusive (no debounce increment, no status change). **Do not use load average for this**: with `CPUQuota`, ffprobes throttled by the quota count as runnable, so load sits at ~5 while the VPS is ~70% idle — load-based detection fired every cycle and would have suppressed every real offline-by-timeout.
 - `ffprobe` runs with `-probesize 32768 -analyzeduration 0` (~3× shorter wall time, so each worker slot frees up sooner). Validated against the whole online fleet before rollout.
 
-Throughput rule of thumb: with ~13% of cameras offline (each holding a worker for the full `CHECKER_TIMEOUT_SEC`), fewer than ~16 workers can't keep up with the ~4.7 probes/s the fleet demands at its current intervals. If you lower workers or shorten intervals, watch the `Ciclo concluído (Ns)` log lines and `uptime` for a few cycles.
+**Check interval = 300 s for the whole fleet (since 2026-10-29).** All 369 cameras were set to `intervalo_segundos = 300` directly in the production DB (previously mostly 75 s, some 30/60 s), and the default for new/edited cameras is 300 (`models.py`, `cadastro.py`, `camera_form.html`; the production column still says `DEFAULT 60`, harmless since the app always sends the value). Fleet demand dropped from ~4.7 to ~1.3 probes/s; right after the change cycles took 10–16 s at ~35% CPU and load fell from ~11 to <1. Trade-off: with the 3-failure debounce, an outage is only confirmed after ~15 min, and the Telegram alert (`NOTIF_THRESHOLD_SEC` = 600 s on top) arrives ~25 min after the camera actually drops. If that latency is ever too high, shorten `NOTIF_THRESHOLD_SEC` or the debounce before shortening intervals again.
+
+Throughput rule of thumb: offline cameras each hold a worker for the full `CHECKER_TIMEOUT_SEC` (production `.env` currently has 24 workers and a 10 s timeout). At 300 s intervals there's ample headroom; if you shorten intervals, demand grows proportionally (at 75 s it was ~4.7 probes/s and fewer than ~16 workers couldn't keep up). Watch the `Ciclo concluído (Ns)` log lines and `uptime` for a few cycles after any change.
 
 Database schema is in `_doc/_db/db.sql` — apply it manually to a fresh MySQL database. SQLAlchemy does **not** manage migrations; schema changes must be applied by hand.
 
@@ -130,3 +132,16 @@ When an operator confirms a camera is online but the app still shows `offline`, 
 
 1. **Genuine outage** — the device is unreachable from anywhere. Test connectivity to the `camera.url_rtsp` host:port from a machine *outside* the VPS (e.g. `Test-NetConnection` or a raw TCP connect). If it fails there too, `ultimo_status = offline` is correct and no action is needed in the app.
 2. **VPS-specific network block** — the device responds fine from an outside network but times out (TCP *and* ICMP) specifically when reached from the VPS's IP (`72.60.58.241`, Hostinger ASN 47583). In this case `ffprobe` will fail every check cycle even though the stream itself is healthy — the debounce (3 failures) just confirms a false offline. Confirmed at least twice on `*.sn.mynetname.net` hosts in the `187.90.0.0/16` range. Diagnose by running the same connectivity test **from the VPS** (`timeout 5 bash -c 'cat < /dev/null > /dev/tcp/<ip>/<port>'`, or literally the same `ffprobe` command the checker runs) and comparing against a test from outside the VPS. If it only fails from the VPS, the fix is on the camera site's router/firewall (allow-list the VPS IP) — not in the CamWatch codebase.
+
+## Troubleshooting: MySQL CPU high
+
+The MySQL server on the VPS is **shared** with other apps: `parkvision` (`/home/workuser/parkvision`, systemd `flaskapp.service`) and `bufunfa`. Don't conclude CamWatch is the culprit from a short stop/start test of the checker — other apps' heavy queries come in bursts (driven by users opening screens), so a 60 s window can easily miss them. Measure per schema with `performance_schema` instead:
+
+```sql
+SELECT schema_name, COUNT_STAR, ROUND(SUM_TIMER_WAIT/1e12,1) total_s, ROUND(AVG_TIMER_WAIT/1e9,1) avg_ms,
+       SUM_ROWS_EXAMINED, LEFT(DIGEST_TEXT,160)
+FROM performance_schema.events_statements_summary_by_digest
+ORDER BY SUM_TIMER_WAIT DESC LIMIT 10;
+```
+
+These counters are cumulative since mysqld started; for current behaviour take two snapshots a minute apart and diff them, keyed by `schema_name` **+** `DIGEST` (the same digest, e.g. `COMMIT`, exists in several schemas). History (2026-10-29): MySQL at 72–81% CPU was almost entirely ParkVision's `vw_estacionados` view (avg 5 s, ~2.8M rows examined per call; ~110,000 s of DB time in 5 days vs ~1,000 s for all of CamWatch); it was later optimized on the ParkVision side (~150 ms) and MySQL dropped to 2–4%. ParkVision's `INSERT INTO logbruto` is also slow (avg ~750 ms) because each row carries a ~280 KB base64 photo inside `jsonbruto`, followed by a cleanup `DELETE` on every insert. Note also `innodb_buffer_pool_size` is still the 128 MB default on an 8 GB VPS; raising it requires a MySQL restart (brief outage for all apps).
