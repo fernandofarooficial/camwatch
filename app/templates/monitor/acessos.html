@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Acessos — CamWatch{% endblock %}
+{% block page_title %}Histórico de acessos{% endblock %}
+
+{% block content %}
+
+  <form class="filtros"
+        hx-get="{{ url_for('monitor.historico_acessos_parcial') }}"
+        hx-target="#tabela-wrapper"
+        hx-trigger="change, submit"
+        hx-swap="innerHTML"
+        hx-push-url="false">
+    <div class="filtro-grupo">
+      <label for="sel-escopo">Escopo</label>
+      <select name="escopo" id="sel-escopo">
+        <option value="">Todos</option>
+        <option value="total" {% if escopo == 'total' %}selected{% endif %}>Acesso total</option>
+        {% for e in empresas %}
+          <option value="{{ e.id }}" {% if escopo == e.id|string %}selected{% endif %}>{{ e.nome }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <button type="submit" class="btn-filtrar">Filtrar</button>
+  </form>
+
+  <div id="tabela-wrapper">
+    {% include "partials/tabela_acessos.html" %}
+  </div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function syncFiltros() {
+    const form = document.querySelector('form.filtros');
+    const params = new URLSearchParams();
+    new FormData(form).forEach((val, key) => { if (val) params.set(key, val); });
+    const qs = params.toString();
+    history.replaceState(null, '', location.pathname + (qs ? '?' + qs : ''));
+  }
+  document.querySelector('form.filtros').addEventListener('change', syncFiltros);
+  document.querySelector('form.filtros').addEventListener('submit', syncFiltros);
+</script>
+{% endblock %}

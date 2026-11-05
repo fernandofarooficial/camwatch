@@ -1,0 +1,51 @@
+{% macro pag_url(p) %}{{ url_for('monitor.historico_acessos_parcial', page=p, escopo=escopo or none) }}{% endmacro %}
+
+<div class="tabela-header">
+  <span class="tabela-total">{{ total }} acesso{{ 's' if total != 1 else '' }}</span>
+</div>
+
+{% if acessos %}
+<div class="tabela-wrapper">
+  <table class="tabela-eventos">
+    <thead>
+      <tr>
+        <th>Data e hora</th>
+        <th>Escopo</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for a in acessos %}
+      <tr>
+        <td class="td-mono td-ts">{{ a.timestamp.strftime('%d/%m/%Y %H:%M:%S') }}</td>
+        <td>{{ a.escopo }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if paginas > 1 %}
+<div class="paginacao">
+  {% if page > 1 %}
+    <button class="btn-pag"
+            hx-get="{{ pag_url(page - 1) }}"
+            hx-target="#tabela-wrapper"
+            hx-swap="innerHTML">‹ Anterior</button>
+  {% endif %}
+
+  <span class="pag-info">{{ page }} / {{ paginas }}</span>
+
+  {% if page < paginas %}
+    <button class="btn-pag"
+            hx-get="{{ pag_url(page + 1) }}"
+            hx-target="#tabela-wrapper"
+            hx-swap="innerHTML">Próxima ›</button>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="tabela-vazia">
+  <span>Nenhum acesso encontrado para o filtro selecionado.</span>
+</div>
+{% endif %}

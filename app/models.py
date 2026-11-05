@@ -184,3 +184,21 @@ class EventoCamera(db.Model):
             "timestamp":                self.timestamp.isoformat(),
             "duracao_offline_segundos": self.duracao_offline_segundos,
         }
+
+
+# ------------------------------------------------------------------
+# AcessoLog  (um registro por login bem-sucedido, append-only)
+# ------------------------------------------------------------------
+
+class AcessoLog(db.Model):
+    __tablename__ = "acesso_log"
+
+    id         = db.Column(db.BigInteger, primary_key=True)
+    timestamp  = db.Column(db.DateTime, nullable=False, default=_agora)
+    # NULL = acesso total (senha master). Sem FK: o histórico sobrevive à exclusão da empresa.
+    empresa_id = db.Column(db.Integer, nullable=True)
+    # Nome exibido no momento do acesso; não muda se a empresa for renomeada ou excluída.
+    escopo     = db.Column(db.String(100), nullable=False)
+
+    def __repr__(self):
+        return f"<AcessoLog escopo={self.escopo!r} ts={self.timestamp}>"

@@ -52,7 +52,7 @@ CamWatch runs as **two independent processes** that share the same MySQL databas
 Flask app created via `create_app()` factory. In production, `DispatcherMiddleware` mounts it at `/camwatch`, so all `url_for()` calls, redirects, and HTMX targets must remain relative — never hardcode the path prefix. In development, `_app.run(debug=True)` bypasses the middleware and runs at root.
 
 Two blueprints:
-- `monitor_bp` — mounted at `/` — the four monitoring screens plus access control routes (`/acesso`, `/sair`)
+- `monitor_bp` — mounted at `/` — the four monitoring screens, access control routes (`/acesso`, `/sair`) and the master-only access history (`/acessos`)
 - `cadastro_bp` — mounted at `/cadastro` — CRUD for empresas, grupos, cameras; includes `/cameras/<id>/toggle` (POST) to activate/deactivate a camera directly from the listing without going through the edit form
 
 **HTMX pattern**: Full-page routes render complete templates; corresponding `/parcial` or `/detalhe/<id>` routes return only the relevant fragment. The partial endpoints share query logic with their parent full-page routes via private helper functions (`_query_eventos`, `_query_cameras_polaroid`, etc.).
@@ -83,6 +83,19 @@ Session keys set on login:
 
 **Master sessions**: `_empresa_restrita()` returns `None` and all data is visible with no forced filter; the full Cadastro menu (including Empresas) is shown.
 
+**Access history** (`/acessos`, partial `/acessos/parcial`): every successful login inserts a row into `acesso_log` (`_registrar_acesso` in `monitor.py`), with the scope and São Paulo time. It records logins, not page views, and a failure to write never blocks the login. Both routes return 403 unless `session["empresa_acesso"] == "*"`, and the sidebar link only appears for master sessions. `empresa_id` has no FK and `escopo` is a name snapshot, so history survives renaming or deleting an empresa; `empresa_id IS NULL` means master. Migration:
+
+```sql
+CREATE TABLE acesso_log (
+  id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+  timestamp  DATETIME NOT NULL,
+  empresa_id INT NULL,
+  escopo     VARCHAR(100) NOT NULL,
+  INDEX idx_acesso_log_timestamp (timestamp),
+  INDEX idx_acesso_log_empresa (empresa_id, timestamp)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+```
+
 **`empresa.senha`**: stored as `CHAR(6)` (nullable) in the `empresa` table to preserve leading zeros. Set via the empresa edit form in Cadastros. If `NULL`, that empresa cannot be accessed by PIN (only via master password). Migration for existing databases: `ALTER TABLE empresa ADD COLUMN senha CHAR(6) NULL AFTER ativo;`
 
 ### Checker process (`checker/service.py`)
@@ -105,6 +118,7 @@ Infinite loop:
 
 - `empresa` → `grupo_camera` (many) → `camera` (many) → `evento_camera` (many, append-only)
 - `empresa.senha` (`CHAR(6) NULL`) — 6-digit numeric PIN for session-based access control; `NULL` means no PIN configured
+- `acesso_log` — append-only, one row per successful login; not linked to `empresa` by FK (see "Access history")
 - `evento_camera` only records **state changes**, not every check. `duracao_offline_segundos` is populated on the *online* event (not the offline one) when the camera recovers.
 - All datetimes are stored as naive `DATETIME` in São Paulo time (`America/Sao_Paulo`). The `_agora()` helper in `models.py` and `_SP` timezone objects throughout enforce this consistently.
 - `camera.ultimo_status` is a denormalized cache of the latest event status — avoid querying `evento_camera` for current status; use `camera.ultimo_status` instead.

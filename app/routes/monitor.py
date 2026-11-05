@@ -8,11 +8,11 @@ from zoneinfo import ZoneInfo
 
 import json as _json
 
-from flask import Blueprint, render_template, request, session, redirect, url_for, current_app
+from flask import Blueprint, render_template, request, session, redirect, url_for, current_app, abort
 from sqlalchemy import desc, func, text
 from sqlalchemy.orm import joinedload
 
-from app.models import db, EventoCamera, Camera, GrupoCamera, Empresa, StatusCamera, StatusEvento
+from app.models import db, AcessoLog, EventoCamera, Camera, GrupoCamera, Empresa, StatusCamera, StatusEvento
 from config import Config
 
 _NOTIF_THRESHOLD_SEC = Config.NOTIF_THRESHOLD_SEC
@@ -44,6 +44,16 @@ def verificar_acesso():
         return redirect(url_for("monitor.acesso"))
 
 
+def _registrar_acesso(empresa_id: int | None, escopo: str) -> None:
+    """Grava o login no histórico. Uma falha aqui nunca impede a entrada do usuário."""
+    try:
+        db.session.add(AcessoLog(empresa_id=empresa_id, escopo=escopo))
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception("Falha ao registrar acesso (escopo=%s)", escopo)
+
+
 @monitor_bp.route("/acesso", methods=["GET", "POST"])
 def acesso():
     if "empresa_acesso" in session:
@@ -58,6 +68,7 @@ def acesso():
         if master and pin == master:
             session["empresa_acesso"] = "*"
             session["empresa_nome"]   = "Acesso total"
+            _registrar_acesso(None, "Acesso total")
             return redirect(url_for("monitor.index"))
 
         # PIN de empresa: exatamente 6 dígitos
@@ -66,6 +77,7 @@ def acesso():
             if empresa:
                 session["empresa_acesso"] = empresa.id
                 session["empresa_nome"]   = empresa.nome
+                _registrar_acesso(empresa.id, empresa.nome)
                 return redirect(url_for("monitor.index"))
 
         erro = "Senha incorreta."
@@ -78,6 +90,64 @@ def sair():
     session.pop("empresa_acesso", None)
     session.pop("empresa_nome",   None)
     return redirect(url_for("monitor.acesso"))
+
+
+# ------------------------------------------------------------------
+# Histórico de acessos — apenas senha master
+# ------------------------------------------------------------------
+
+def _exigir_master() -> None:
+    if session.get("empresa_acesso") != "*":
+        abort(403)
+
+
+def _query_acessos(escopo: str, page: int):
+    """Retorna (acessos, total, paginas). escopo: "" = todos, "total" = master, ou id da empresa."""
+    q = AcessoLog.query
+    if escopo == "total":
+        q = q.filter(AcessoLog.empresa_id.is_(None))
+    elif escopo.isdecimal():
+        q = q.filter(AcessoLog.empresa_id == int(escopo))
+
+    total   = q.count()
+    acessos = (q.order_by(desc(AcessoLog.timestamp), desc(AcessoLog.id))
+               .offset((page - 1) * PAGE_SIZE).limit(PAGE_SIZE).all())
+    paginas = (total + PAGE_SIZE - 1) // PAGE_SIZE
+    return acessos, total, paginas
+
+
+@monitor_bp.route("/acessos")
+def historico_acessos():
+    _exigir_master()
+    escopo = request.args.get("escopo", "")
+    page   = max(request.args.get("page", 1, type=int), 1)
+    acessos, total, paginas = _query_acessos(escopo, page)
+    return render_template(
+        "monitor/acessos.html",
+        empresas=Empresa.query.order_by(Empresa.nome).all(),
+        acessos=acessos,
+        total=total,
+        paginas=paginas,
+        page=page,
+        escopo=escopo,
+    )
+
+
+@monitor_bp.route("/acessos/parcial")
+def historico_acessos_parcial():
+    """Endpoint HTMX — retorna só a tabela de acessos."""
+    _exigir_master()
+    escopo = request.args.get("escopo", "")
+    page   = max(request.args.get("page", 1, type=int), 1)
+    acessos, total, paginas = _query_acessos(escopo, page)
+    return render_template(
+        "partials/tabela_acessos.html",
+        acessos=acessos,
+        total=total,
+        paginas=paginas,
+        page=page,
+        escopo=escopo,
+    )
 
 
 # ------------------------------------------------------------------
